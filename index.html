@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#050605">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="Life OS">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=DM+Serif+Display&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<title>Life OS</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+:root{
+  --bg:#050605;--card:#0B0E0C;--border:#1A2E28;
+  --text:#E4F5EC;--mute:#5E756A;
+  --cyan:#3DDCEC;--green:#3DDC97;--red:#E06868;--amber:#E0B454;
+  --faith:#3DDC97;--health:#E08A54;--music:#E0B454;--finance:#5CA0E0;--growth:#B08CE0;--home:#3DDCEC;
+  --serif:'DM Serif Display',serif;--mono:'Space Mono',monospace;--sans:'Space Grotesk',sans-serif;
+  --nav:64px;--hdr:64px
+}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14px;overflow:hidden}
+.app{display:flex;flex-direction:column;height:100%;max-width:430px;margin:0 auto;position:relative;border-left:1px solid var(--border);border-right:1px solid var(--border)}
+.hdr{display:flex;justify-content:space-between;align-items:center;padding:0 18px;height:var(--hdr);border-bottom:1px solid var(--border);flex-shrink:0}
+.hdr .brand-mini{font-size:9px;letter-spacing:3px;color:var(--green)}
+.hdr .brand-title{font-family:var(--serif);font-size:16px;margin-top:2px}
+.hdr .status{display:flex;align-items:center;gap:5px}
+.hdr .dot{width:5px;height:5px;border-radius:50%;background:var(--green)}
+.hdr .status-text{font-family:var(--mono);font-size:8px;color:var(--mute);letter-spacing:1px}
+.screens{flex:1;overflow:hidden;position:relative}
+.screen{position:absolute;inset:0;overflow-y:auto;overflow-x:hidden;padding:16px 18px calc(var(--nav) + 16px);display:none}
+.screen.active{display:block}
+.screen::-webkit-scrollbar{width:2px}
+.nav{position:absolute;bottom:0;left:0;right:0;height:var(--nav);background:#080A09;border-top:1px solid var(--border);display:flex;z-index:100}
+.nb{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;border:none;background:transparent;color:var(--mute);font-size:8.5px;cursor:pointer;font-family:var(--sans)}
+.nb svg{width:17px;height:17px}
+.datebar{font-family:var(--mono);font-size:10px;color:var(--mute);letter-spacing:1px;margin-bottom:14px}
+.section-label{display:flex;align-items:center;gap:7px;margin:20px 0 10px}
+.section-label .sq{width:6px;height:6px;flex-shrink:0}
+.section-label span{font-family:var(--mono);font-size:10px;letter-spacing:2px;color:var(--mute)}
+.section-label .ln{flex:1;height:1px;background:var(--border)}
+.card{position:relative;background:rgba(18,22,20,.6);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:14px 16px;margin-bottom:10px;box-shadow:0 1px 0 rgba(255,255,255,.05) inset,0 8px 18px rgba(0,0,0,.35)}
+.brk{position:absolute;width:10px;height:10px}
+.brk.tl{top:-1px;left:-1px;border-top:2px solid;border-left:2px solid}
+.brk.tr{top:-1px;right:-1px;border-top:2px solid;border-right:2px solid}
+.brk.bl{bottom:-1px;left:-1px;border-bottom:2px solid;border-left:2px solid}
+.brk.br{bottom:-1px;right:-1px;border-bottom:2px solid;border-right:2px solid}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.grid5{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
+.stat-mini{text-align:center}
+.stat-mini .v{font-family:var(--serif);font-size:18px}
+.stat-mini .l{font-family:var(--mono);font-size:8.5px;color:var(--mute);margin-top:4px}
+.checkline{display:flex;align-items:center;gap:9px;padding:8px 0;font-size:12px;cursor:pointer;border-bottom:1px solid #14201B}
+.checkline:last-child{border-bottom:none}
+.checkline .box{font-size:13px;flex-shrink:0}
+.tristate{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid #14201B}
+.tristate:last-child{border-bottom:none}
+.tristate .lbl{font-size:11.5px}
+.tristate .pills{display:flex;gap:5px}
+.pill{font-size:9px;font-family:var(--mono);padding:3px 8px;border-radius:10px;border:1px solid var(--border);color:var(--mute);cursor:pointer;background:transparent}
+.progress-row{padding:9px 0;border-bottom:1px solid #14201B}
+.progress-row:last-child{border-bottom:none}
+.progress-row .top{display:flex;justify-content:space-between;font-size:11px;margin-bottom:6px}
+.progress-row .top .note{font-family:var(--mono)}
+.bar-track{background:#152019;height:5px;border-radius:2px;overflow:hidden}
+.bar-fill{height:100%}
+.btn-ghost{background:var(--card);border:1px solid var(--border);color:var(--text);font-family:var(--sans);font-size:11px;padding:8px 14px;border-radius:6px;cursor:pointer;width:100%;text-align:center}
+.input{width:100%;background:var(--card);border:1px solid var(--border);border-radius:6px;padding:9px 11px;color:var(--text);font-family:var(--sans);font-size:12px;outline:none;margin-bottom:8px}
+.input:focus{border-color:var(--cyan)}
+.textarea{min-height:60px;resize:vertical}
+.stat-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #14201B;font-size:11.5px}
+.stat-row:last-child{border-bottom:none}
+.count-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid #14201B}
+.count-row:last-child{border-bottom:none}
+.count-btns{display:flex;gap:6px;align-items:center}
+.count-btns button{width:22px;height:22px;border-radius:5px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;font-size:12px}
+.count-val{font-family:var(--mono);font-size:12px;min-width:16px;text-align:center}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.cd{aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:2px;background:var(--card);border:1px solid var(--border)}
+.cd .n{font-family:var(--mono);font-size:8px;color:var(--mute)}
+.cd .s{font-family:var(--mono);font-size:9px}
+.proj-card{position:relative;background:var(--card);border:1px solid var(--border);border-radius:4px;padding:12px;cursor:pointer}
+.proj-card .name{font-size:11px;margin-bottom:8px}
+.proj-card .meta{font-family:var(--mono);font-size:9px;color:var(--mute);margin-top:6px}
+.save-btn{background:var(--green);color:#04120C;border:none;font-family:var(--sans);font-weight:700;font-size:12px;padding:11px;border-radius:6px;width:100%;cursor:pointer;margin-top:14px}
+.hero-num{font-family:var(--serif)}
+.modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:flex-end;justify-content:center;z-index:200}
+.modal-sheet{width:100%;max-width:430px;background:var(--card);border-top:1px solid var(--border);border-radius:14px 14px 0 0;padding:18px;max-height:80vh;overflow-y:auto}
+.modal-title{font-family:var(--serif);font-size:16px;margin-bottom:14px}
+.btn-group{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.opt-btn{flex:1;min-width:70px;background:var(--bg);border:1px solid var(--border);color:var(--mute);font-family:var(--sans);font-size:11px;padding:9px;border-radius:6px;cursor:pointer;text-align:center}
+.opt-btn.sel{color:var(--text);border-color:var(--cyan);box-shadow:0 0 10px rgba(61,220,236,.5)}
+.modal-actions{display:flex;gap:8px;margin-top:16px}
+.modal-actions button{flex:1;padding:11px;border-radius:6px;border:1px solid var(--border);font-family:var(--sans);font-weight:700;font-size:12px;cursor:pointer}
+.btn-primary{background:var(--green);color:#04120C;border:none !important}
+.btn-cancel{background:var(--card);color:var(--mute)}
+.save-btn,.btn-ghost,.opt-btn,.nb{transition:transform .12s ease}
+.save-btn:active,.btn-ghost:active,.opt-btn:active{transform:scale(0.96)}
+.nb:active{transform:scale(0.9)}
+.btn-ghost,.opt-btn{box-shadow:0 1px 0 rgba(255,255,255,.06) inset,0 3px 8px rgba(0,0,0,.35)}
+.flame-wrap{width:40px;height:40px;margin:0 auto 6px;border-radius:50%;display:flex;align-items:center;justify-content:center}
+.fab{position:absolute;left:50%;top:-22px;transform:translateX(-50%);width:50px;height:50px;border-radius:50%;background:var(--cyan);border:3px solid var(--bg);display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 0 16px rgba(61,220,236,.6),0 4px 10px rgba(0,0,0,.4);transition:transform .12s ease}
+.fab:active{transform:translateX(-50%) scale(0.92)}
+.fab svg{width:22px;height:22px;color:#04120C}
+.delta-pill{display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:3px 9px;border-radius:10px;font-family:var(--mono)}
+.trend-labels{display:flex;justify-content:space-between;font-family:var(--mono);font-size:8px;color:var(--mute);margin-top:4px}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="hdr">
+    <div><div class="brand-mini">DAVYDENKO</div><div class="brand-title">Life OS</div></div>
+    <div class="status"><div class="dot"></div><span class="status-text">SYSTEM ONLINE</span></div>
+  </div>
+
+  <div class="screens">
+    <div class="screen active" id="s-home"></div>
+    <div class="screen" id="s-faith"></div>
+    <div class="screen" id="s-health"></div>
+    <div class="screen" id="s-music"></div>
+    <div class="screen" id="s-finance"></div>
+    <div class="screen" id="s-growth"></div>
+  </div>
+
+  <div class="nav">
+    <button class="fab" id="fab-btn" aria-label="Quick log"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M12 5v14M5 12h14"/></svg></button>
+    <button class="nb" data-tab="home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12l9-9 9 9M5 10v10h14V10"/></svg>Home</button>
+    <button class="nb" data-tab="faith"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1111.2 3 7 7 0 0021 12.8z"/></svg>Faith</button>
+    <button class="nb" data-tab="health"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.8 4.6a5.5 5.5 0 00-7.8 0L12 5.6l-1-1a5.5 5.5 0 00-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 000-7.8z"/></svg>Health</button>
+    <button class="nb" data-tab="music"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13M9 18a3 3 0 11-6 0 3 3 0 016 0zm12-2a3 3 0 11-6 0 3 3 0 016 0z"/></svg>Music</button>
+    <button class="nb" data-tab="finance"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M9 10a3 3 0 013-1c2 0 3 1 3 2s-1 2-3 2-3 1-3 2 1 2 3 2a3 3 0 003-1"/></svg>Finance</button>
+    <button class="nb" data-tab="growth"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22v-9M12 13c-4 0-7-3-7-7 4 0 7 3 7 7zm0 0c4 0 7-3 7-7-4 0-7 3-7 7z"/></svg>Growth</button>
+  </div>
+</div>
+
+<div id="modal-root"></div>
+
+<script>
+/* ============ STORAGE ============ */
+const DB = {
+  day(dateStr){
+    const all = JSON.parse(localStorage.getItem('lo_days')||'{}');
+    if(!all[dateStr]) all[dateStr] = {faith:{},health:{},music:{},finance:{},growth:{}};
+    return all[dateStr];
+  },
+  saveDay(dateStr, data){
+    const all = JSON.parse(localStorage.getItem('lo_days')||'{}');
+    all[dateStr] = data;
+    localStorage.setItem('lo_days', JSON.stringify(all));
+  },
+  allDays(){ return JSON.parse(localStorage.getItem('lo_days')||'{}'); },
+  projects(){ return JSON.parse(localStorage.getItem('lo_projects')||'[]'); },
+  saveProjects(p){ localStorage.setItem('lo_projects', JSON.stringify(p)); },
+  transactions(){ return JSON.parse(localStorage.getItem('lo_transactions')||'[]'); },
+  saveTransactions(t){ localStorage.setItem('lo_transactions', JSON.stringify(t)); },
+  goals(){ return JSON.parse(localStorage.getItem('lo_goals')||'{"trading":0,"longrange":0,"savedSoFar":0,"tradingWithdrawn":0}'); },
+  saveGoals(g){ localStorage.setItem('lo_goals', JSON.stringify(g)); }
+};
+
+function todayStr(){ return new Date().toISOString().slice(0,10); }
+let CURRENT_DATE = todayStr();
+let day = DB.day(CURRENT_DATE);
+
+/* ============ SCORING ============ */
+const PRAYER_POINTS = {caught:20, delayed:5, notprayed:0, unset:0};
+
+function faithScore(d){
+  const prayers = ['fajr','dhuhr','asr','maghrib','isha'];
+  let sum = 0;
+  prayers.forEach(p=>{ sum += PRAYER_POINTS[d.faith[p]||'unset']; });
+  return sum;
+}
+const HEALTH_BOOL_GOOD = ['fruits','milk','kegel','stopstart','abroller','matroutine','pushups','plank','tennis','running','smokeFree'];
+const HEALTH_BOOL_BAD = ['junk','weed','nailbiting'];
+function healthScore(d){
+  const h = d.health;
+  let points = 0, max = 0;
+  HEALTH_BOOL_GOOD.forEach(k=>{ max++; if(h[k]) points++; });
+  HEALTH_BOOL_BAD.forEach(k=>{ max++; if(!h[k]) points++; });
+  max++; points += Math.min((h.water||0)/5, 1);
+  max++; points += Math.min((h.brushing||0)/2, 1);
+  return Math.round((points/max)*100);
+}
+const GROWTH_ITEMS = ['frame','eyecontact','posture','metacognition','impulse','delayedgrat','nameemotion','spokeup','initiated','fear','words','listening','rehearsal','strictself','strictothers'];
+function growthScore(d){
+  let c=0; GROWTH_ITEMS.forEach(k=>{ if(d.growth[k]) c++; });
+  return Math.round((c/GROWTH_ITEMS.length)*100);
+}
+function musicScore(d){ return d.music.sessionLogged ? 100 : 0; }
+function financeScore(d){ return d.finance.logged ? 100 : 0; }
+function dayScore(d){
+  return Math.round((faithScore(d)+healthScore(d)+musicScore(d)+financeScore(d)+growthScore(d))/5);
+}
+function monthAvg(scoreFn, monthPrefix){
+  const all = DB.allDays();
+  const keys = Object.keys(all).filter(k=>k.startsWith(monthPrefix));
+  if(!keys.length) return 0;
+  let sum=0; keys.forEach(k=>sum+=scoreFn(all[k]));
+  return Math.round(sum/keys.length);
+}
+
+/* ============ HELPERS ============ */
+function el(tag, cls, html){ const e=document.createElement(tag); if(cls)e.className=cls; if(html!==undefined)e.innerHTML=html; return e; }
+function bracket(color){
+  return '<div class="brk tl" style="border-color:'+color+'"></div><div class="brk tr" style="border-color:'+color+'"></div><div class="brk bl" style="border-color:'+color+'"></div><div class="brk br" style="border-color:'+color+'"></div>';
+}
+function sectionLabel(text, color){
+  return '<div class="section-label"><span class="sq" style="background:'+(color||'var(--mute)')+'"></span><span>'+text+'</span><span class="ln"></span></div>';
+}
+function progressRow(label, pct, note, color){
+  return '<div class="progress-row"><div class="top"><span>'+label+'</span><span class="note" style="color:'+color+'">'+note+'</span></div><div class="bar-track"><div class="bar-fill" style="width:'+pct+'%;background:'+color+'"></div></div></div>';
+}
+function ringSvg(pct,color,val,size){
+  size=size||70; const r=(size/2)-6, c=2*Math.PI*r, off=c-(c*pct/100);
+  return '<span style="display:inline-block;filter:drop-shadow(0 0 6px '+color+')"><svg width="'+size+'" height="'+size+'" viewBox="0 0 '+size+' '+size+'">'+
+    '<circle cx="'+size/2+'" cy="'+size/2+'" r="'+r+'" fill="none" stroke="#152019" stroke-width="4"></circle>'+
+    '<circle cx="'+size/2+'" cy="'+size/2+'" r="'+r+'" fill="none" stroke="'+color+'" stroke-width="4" stroke-dasharray="'+c+'" stroke-dashoffset="'+off+'" transform="rotate(-90 '+size/2+' '+size/2+')"></circle>'+
+    '<text x="'+size/2+'" y="'+(size/2+5)+'" text-anchor="middle" font-size="14" fill="#E4F5EC" font-family="DM Serif Display,serif">'+val+'</text></svg></span>';
+}
+function computeStreak(testFn){
+  const all = DB.allDays();
+  let d = new Date(CURRENT_DATE);
+  let count = 0;
+  while(true){
+    const ds = d.toISOString().slice(0,10);
+    const rec = all[ds];
+    if(rec && testFn(rec)){ count++; d.setDate(d.getDate()-1); }
+    else break;
+  }
+  return count;
+}
+function flameStat(label, value, color){
+  return '<div class="card" style="text-align:center;">'+bracket(color)+
+    '<div class="flame-wrap" style="background:#152019;filter:drop-shadow(0 0 8px '+color+')">'+
+    '<svg width="18" height="18" viewBox="0 0 24 24" fill="'+color+'"><path d="M12 2c1 3-2 4-2 7a4 4 0 008 0c0-2-1-3-1-3 2 1 3 4 3 6a6 6 0 01-12 0c0-4 3-6 4-10z"/></svg></div>'+
+    '<div class="hero-num" style="font-size:20px;color:'+color+'">'+value+'</div>'+
+    '<div style="font-family:var(--mono);font-size:8.5px;color:var(--mute);margin-top:2px">'+label+'</div></div>';
+}
+function saveDayNow(){ DB.saveDay(CURRENT_DATE, day); renderAll(); }
+
+function closeModal(){ document.getElementById('modal-root').innerHTML=''; }
+function openModal(html){
+  document.getElementById('modal-root').innerHTML = '<div class="modal-backdrop" id="modal-bg"><div class="modal-sheet">'+html+'</div></div>';
+  document.getElementById('modal-bg').addEventListener('click', function(e){ if(e.target.id==='modal-bg') closeModal(); });
+}
+function buildBackupPayload(){
+  return {
+    app: 'lifeos',
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    days: DB.allDays(),
+    projects: DB.projects(),
+    transactions: DB.transactions(),
+    goals: DB.goals()
+  };
+}
+function exportData(){
+  const payload = buildBackupPayload();
+  const blob = new Blob([JSON.stringify(payload, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'lifeos-backup-'+todayStr()+'.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  localStorage.setItem('lo_last_export_at', new Date().toISOString());
+  renderHome();
+}
+function importDataFile(file){
+  const reader = new FileReader();
+  reader.onload = function(e){
+    let parsed;
+    try{ parsed = JSON.parse(e.target.result); }
+    catch(err){ openModal('<div class="modal-title">Could not read file</div><div style="font-size:12px;color:var(--text);margin-bottom:14px">That file is not valid. Nothing was changed.</div><div class="modal-actions"><button class="btn-primary" onclick="closeModal()">OK</button></div>'); return; }
+    if(!parsed || parsed.app!=='lifeos' || !parsed.days){
+      openModal('<div class="modal-title">Not a Life OS backup</div><div style="font-size:12px;color:var(--text);margin-bottom:14px">That file does not look like a Life OS backup. Nothing was changed.</div><div class="modal-actions"><button class="btn-primary" onclick="closeModal()">OK</button></div>');
+      return;
+    }
+    const when = parsed.exportedAt ? new Date(parsed.exportedAt).toLocaleString() : 'unknown date';
+    openModal(
+      '<div class="modal-title">Restore backup</div>'+
+      '<div style="font-size:12px;color:var(--text);margin-bottom:14px">This backup is from '+when+'. Restoring replaces all data currently on this device. This cannot be undone.</div>'+
+      '<div class="modal-actions"><button class="btn-cancel" id="restore-cancel">Cancel</button><button class="btn-primary" id="restore-confirm">Restore</button></div>'
+    );
+    document.getElementById('restore-cancel').addEventListener('click', closeModal);
+    document.getElementById('restore-confirm').addEventListener('click', ()=>{
+      localStorage.setItem('lo_days', JSON.stringify(parsed.days||{}));
+      localStorage.setItem('lo_projects', JSON.stringify(parsed.projects||[]));
+      localStorage.setItem('lo_transactions', JSON.stringify(parsed.transactions||[]));
+      localStorage.setItem('lo_goals', JSON.stringify(parsed.goals||{trading:0,longrange:0,savedSoFar:0,tradingWithdrawn:0}));
+      day = DB.day(CURRENT_DATE);
+      closeModal();
+      renderAll();
+    });
+  };
+  reader.readAsText(file);
+}
+function timeSelectHtml(prefix, val){
+  let hh='07', mm='00';
+  if(val){ const parts=val.split(':'); hh=parts[0]; mm=parts[1]; }
+  let hOpts=''; for(let i=0;i<24;i++){ const v=String(i).padStart(2,'0'); hOpts += '<option value="'+v+'" '+(v===hh?'selected':'')+'>'+v+'</option>'; }
+  let mOpts=''; for(let i=0;i<60;i+=5){ const v=String(i).padStart(2,'0'); mOpts += '<option value="'+v+'" '+(v===mm?'selected':'')+'>'+v+'</option>'; }
+  return '<div style="display:flex;gap:8px"><select class="input" id="'+prefix+'-h">'+hOpts+'</select><select class="input" id="'+prefix+'-m">'+mOpts+'</select></div>';
+}
+
+/* ============ HOME ============ */
+function renderHome(){
+  const s = document.getElementById('s-home');
+  const scores = {faith:faithScore(day), health:healthScore(day), music:musicScore(day), finance:financeScore(day), growth:growthScore(day)};
+  const total = dayScore(day);
+  const monthPrefix = CURRENT_DATE.slice(0,7);
+  const cats = [['Faith','var(--faith)',scores.faith],['Health','var(--health)',scores.health],['Music','var(--music)',scores.music],['Finance','var(--finance)',scores.finance],['Growth','var(--growth)',scores.growth]];
+  let html = '<div class="datebar">'+new Date().toDateString().toUpperCase()+'</div>';
+  const yDate = new Date(CURRENT_DATE); yDate.setDate(yDate.getDate()-1);
+  const yStr = yDate.toISOString().slice(0,10);
+  const yRec = DB.allDays()[yStr];
+  const yScore = yRec ? dayScore(yRec) : null;
+  const delta = yScore===null ? null : total - yScore;
+  const deltaHtml = delta===null ? '<span class="delta-pill" style="background:#152019;color:var(--mute)">No data yesterday</span>' :
+    delta>=0 ? '<span class="delta-pill" style="background:#1E2A21;color:var(--green)">&#8593; '+delta+' vs yesterday</span>' :
+    '<span class="delta-pill" style="background:#2A1414;color:var(--red)">&#8595; '+Math.abs(delta)+' vs yesterday</span>';
+  html += '<div class="card">'+bracket('var(--home)')+'<div style="display:flex;align-items:center;gap:14px">'+ringSvg(total,'var(--home)',total,80)+
+    '<div><div style="font-family:var(--mono);font-size:9px;color:var(--mute)">CODE SCORE TODAY</div>'+
+    '<div style="margin-top:6px">'+deltaHtml+'</div>'+
+    '<div style="font-family:var(--mono);font-size:9px;color:var(--mute);margin-top:8px">Faith '+scores.faith+' / Health '+scores.health+' / Music '+scores.music+'</div>'+
+    '<div style="font-family:var(--mono);font-size:9px;color:var(--mute);margin-top:2px">Finance '+scores.finance+' / Growth '+scores.growth+'</div></div></div></div>';
+
+  const trendDays = [];
+  for(let i=6;i>=0;i--){
+    const dd = new Date(CURRENT_DATE); dd.setDate(dd.getDate()-i);
+    const ds = dd.toISOString().slice(0,10);
+    const rec = DB.allDays()[ds];
+    trendDays.push({date:dd, score: rec?dayScore(rec):null});
+  }
+  const validScores = trendDays.filter(t=>t.score!==null).map(t=>t.score);
+  const maxS = validScores.length?Math.max(...validScores,1):100;
+  const minS = validScores.length?Math.min(...validScores,0):0;
+  const range = Math.max(maxS-minS,1);
+  const chartW=260, chartH=50;
+  const pts = trendDays.map((t,i)=>{
+    const x = (i/(trendDays.length-1))*chartW;
+    const y = t.score===null ? chartH/2 : chartH - ((t.score-minS)/range)*chartH;
+    return {x,y,score:t.score};
+  });
+  const line = pts.filter(p=>p.score!==null).map(p=>p.x+','+p.y).join(' ');
+  let trendSvg = '<svg width="100%" height="'+chartH+'" viewBox="0 0 '+chartW+' '+chartH+'" preserveAspectRatio="none">';
+  trendSvg += '<line x1="0" y1="'+chartH+'" x2="'+chartW+'" y2="'+chartH+'" stroke="#1A2E28" stroke-width="1"></line>';
+  if(line) trendSvg += '<polyline points="'+line+'" fill="none" stroke="var(--home)" stroke-width="2" stroke-linecap="round"></polyline>';
+  pts.forEach(p=>{ if(p.score!==null) trendSvg += '<circle cx="'+p.x+'" cy="'+p.y+'" r="2.5" fill="var(--home)"></circle>'; });
+  trendSvg += '</svg>';
+  const dayLabels = trendDays.map(t=>'<span>'+t.date.toLocaleDateString('en-US',{weekday:'short'}).charAt(0)+'</span>').join('');
+  html += '<div class="card">'+bracket('var(--home)')+'<div style="font-family:var(--mono);font-size:9px;color:var(--mute);margin-bottom:6px">LAST 7 DAYS</div>'+trendSvg+'<div class="trend-labels">'+dayLabels+'</div></div>';
+
+  html += sectionLabel('THIS MONTH BY CATEGORY');
+  html += '<div class="grid5">';
+  cats.forEach(c=>{
+    const avg = monthAvg(d=> c[0]==='Faith'?faithScore(d):c[0]==='Health'?healthScore(d):c[0]==='Music'?musicScore(d):c[0]==='Finance'?financeScore(d):growthScore(d), monthPrefix);
+    html += '<div class="card" style="padding:10px">'+bracket(c[1])+'<div style="text-align:center">'+ringSvg(avg,c[1],avg,52)+'<div style="font-family:var(--mono);font-size:8px;color:var(--mute);margin-top:4px">'+c[0].toUpperCase()+'</div></div></div>';
+  });
+  html += '</div>';
+
+  html += sectionLabel('DAILY SCORE, THIS MONTH');
+  const all = DB.allDays();
+  const [y,m] = monthPrefix.split('-').map(Number);
+  const daysInMonth = new Date(y, m, 0).getDate();
+  html += '<div class="cal">';
+  for(let dd=1; dd<=daysInMonth; dd++){
+    const ds = monthPrefix+'-'+String(dd).padStart(2,'0');
+    const rec = all[ds];
+    const sc = rec ? dayScore(rec) : null;
+    const color = sc===null ? 'var(--border)' : sc>=80?'var(--green)':sc>=50?'var(--health)':'var(--red)';
+    html += '<div class="cd" style="border-color:'+color+'"><span class="n">'+dd+'</span>'+(sc!==null?'<span class="s" style="color:'+color+'">'+sc+'</span>':'')+'</div>';
+  }
+  html += '</div>';
+
+  html += sectionLabel('STILL OPEN TODAY');
+  let open = [];
+  if(!day.music.sessionLogged) open.push('Music session not logged');
+  if(!day.finance.logged) open.push('Finance not logged today');
+  if(!Object.keys(day.faith).length) open.push('Prayers not set today');
+  html += '<div class="card">'+bracket('var(--border)')+(open.length ? open.map(o=>'<div class="checkline"><span class="box">&#9633;</span>'+o+'</div>').join('') : '<div style="font-size:11px;color:var(--mute)">Everything logged for today.</div>')+'</div>';
+
+  html += sectionLabel('BACKUP AND RESTORE');
+  const lastExp = localStorage.getItem('lo_last_export_at');
+  const lastExpText = lastExp ? new Date(lastExp).toLocaleDateString()+' at '+new Date(lastExp).toLocaleTimeString() : 'Never';
+  html += '<div class="card">'+bracket('var(--border)')+
+    '<div style="font-size:11px;color:var(--mute);margin-bottom:10px">Last export: '+lastExpText+'</div>'+
+    '<button class="btn-ghost" id="export-data" style="margin-bottom:8px">Export data</button>'+
+    '<button class="btn-ghost" id="import-data">Import data</button>'+
+    '<input type="file" id="import-file" accept="application/json" style="display:none">'+
+    '<div style="font-size:10px;color:var(--mute);margin-top:10px">Export saves everything to a file you keep yourself. Import restores from a file on a new device. Nothing is sent anywhere.</div>'+
+    '</div>';
+
+  s.innerHTML = html;
+
+  document.getElementById('export-data').addEventListener('click', exportData);
+  document.getElementById('import-data').addEventListener('click', ()=> document.getElementById('import-file').click());
+  document.getElementById('import-file').addEventListener('change', (e)=>{
+    if(e.target.files[0]) importDataFile(e.target.files[0]);
+  });
+}
+
+/* ============ FAITH ============ */
+function renderFaith(){
+  const s = document.getElementById('s-faith');
+  const prayers = [['fajr','Fajr'],['dhuhr','Dhuhr'],['asr','Asr'],['maghrib','Maghrib'],['isha','Isha']];
+  let html = sectionLabel('PRAYERS TODAY, TAP TO SET','var(--faith)');
+  html += '<div class="card">'+bracket('var(--faith)');
+  prayers.forEach(p=>{
+    const state = day.faith[p[0]] || 'unset';
+    html += '<div class="tristate"><span class="lbl">'+p[1]+'</span><div class="pills">';
+    [['caught','Caught','var(--green)'],['delayed','Delayed','var(--amber)'],['notprayed','Missed','var(--red)']].forEach(opt=>{
+      const active = state===opt[0];
+      html += '<span class="pill" data-prayer="'+p[0]+'" data-state="'+opt[0]+'" style="'+(active?'border-color:'+opt[2]+';color:'+opt[2]:'')+'">'+opt[1]+'</span>';
+    });
+    html += '</div></div>';
+  });
+  html += '</div>';
+
+  const fajrStreak = computeStreak(r=>r.faith && r.faith.fajr==='caught');
+  html += flameStat('FAJR STREAK', fajrStreak, 'var(--faith)');
+
+  const sc = faithScore(day);
+  html += '<div class="card">'+bracket('var(--border)')+'<div style="text-align:center"><div class="hero-num" style="font-size:26px;color:var(--faith)">'+sc+'</div><div style="font-family:var(--mono);font-size:9px;color:var(--mute);margin-top:4px">TODAY SCORE, CAUGHT 20 / DELAYED 5 / MISSED 0</div></div></div>';
+
+  html += sectionLabel('EXTRA PRACTICE, TAP YES/NO');
+  html += '<div class="card">'+bracket('var(--border)');
+  [['tahajjud','Tahajjud'],['fasting','Fasting, Monday and Thursday'],['dhikr','Dhikr'],['gratitude','Gratitude Swalat']].forEach(x=>{
+    const v = !!day.faith[x[0]];
+    html += '<div class="checkline" data-toggle="'+x[0]+'"><span class="box" style="color:'+(v?'var(--green)':'var(--mute)')+'">'+(v?'&#9632;':'&#9633;')+'</span>'+x[1]+'</div>';
+  });
+  html += '</div>';
+
+  html += sectionLabel('REFLECTION AFTER SWALAT');
+  html += '<div class="card">'+bracket('var(--border)')+'<textarea class="input textarea" id="faith-reflection" placeholder="How did it feel today">'+(day.faith.reflection||'')+'</textarea></div>';
+
+  html += sectionLabel('MONTH TO DATE');
+  const monthPrefix = CURRENT_DATE.slice(0,7);
+  const avg = monthAvg(faithScore, monthPrefix);
+  html += '<div class="card">'+bracket('var(--faith)')+progressRow('Faith consistency', avg, avg+'%', 'var(--faith)')+'</div>';
+
+  html += '<button class="save-btn" id="save-faith">Save today</button>';
+  s.innerHTML = html;
+
+  s.querySelectorAll('.pill').forEach(p=>{
+    p.addEventListener('click', ()=>{ day.faith[p.dataset.prayer]=p.dataset.state; renderFaith(); });
+  });
+  s.querySelectorAll('[data-toggle]').forEach(c=>{
+    c.addEventListener('click', ()=>{ const k=c.dataset.toggle; day.faith[k]=!day.faith[k]; renderFaith(); });
+  });
+  document.getElementById('save-faith').addEventListener('click', ()=>{
+    day.faith.reflection = document.getElementById('faith-reflection').value;
+    saveDayNow();
+  });
+}
+
+/* ============ HEALTH ============ */
+function renderHealth(){
+  const s = document.getElementById('s-health');
+  const h = day.health;
+  let html = '<div class="grid4">';
+  html += '<div class="card stat-mini">'+bracket('var(--border)')+'<div class="v" style="color:var(--health)">'+(h.sleepHours||'--')+'h</div><div class="l">SLEEP</div></div>';
+  html += '<div class="card stat-mini">'+bracket('var(--border)')+'<div class="v" style="color:var(--health)">'+(h.water||0)+'/5</div><div class="l">WATER</div></div>';
+  html += '<div class="card stat-mini">'+bracket('var(--border)')+'<div class="v" style="color:var(--health)">'+(h.brushing||0)+'/2</div><div class="l">BRUSHING</div></div>';
+  html += '<div class="card stat-mini">'+bracket('var(--border)')+'<div class="v" style="color:var(--health)">'+(h.smokeFree?'YES':'NO')+'</div><div class="l">SMOKE-FREE</div></div>';
+  html += '</div>';
+
+  const smokeStreak = computeStreak(r=>r.health && r.health.smokeFree===true);
+  html += sectionLabel('STREAKS', 'var(--health)');
+  html += flameStat('SMOKE-FREE STREAK', smokeStreak, 'var(--health)');
+
+  html += sectionLabel('SLEEP', 'var(--health)');
+  html += '<div class="card">'+bracket('var(--border)')+
+    '<label style="font-family:var(--mono);font-size:9px;color:var(--mute)">BEDTIME</label>'+timeSelectHtml('bedtime', h.bedtime)+
+    '<label style="font-family:var(--mono);font-size:9px;color:var(--mute);margin-top:8px;display:block">WAKE TIME</label>'+timeSelectHtml('waketime', h.waketime)+
+    '</div>';
+
+  html += sectionLabel('WATER AND BRUSHING');
+  html += '<div class="card">'+bracket('var(--border)')+
+    '<div class="count-row"><span>Water, glasses</span><div class="count-btns"><button data-cnt="water" data-d="-1">-</button><span class="count-val">'+(h.water||0)+'</span><button data-cnt="water" data-d="1">+</button></div></div>'+
+    '<div class="count-row"><span>Brushing</span><div class="count-btns"><button data-cnt="brushing" data-d="-1">-</button><span class="count-val">'+(h.brushing||0)+'</span><button data-cnt="brushing" data-d="1">+</button></div></div>'+
+    '</div>';
+
+  html += sectionLabel('FOOD AND SUBSTANCES');
+  html += '<div class="grid2">';
+  html += '<div class="card">'+bracket('var(--border)')+['fruits','junk','milk'].map(k=>checkHtml(k, {fruits:'Fruits',junk:'Junk food',milk:'Milk'}[k], h[k])).join('')+'</div>';
+  html += '<div class="card">'+bracket('var(--border)')+['weed','nailbiting','smokeFree'].map(k=>checkHtml(k, {weed:'Weed',nailbiting:'Nail biting',smokeFree:'Smoke-free today'}[k], h[k])).join('')+'</div>';
+  html += '</div>';
+  if(h.smokeFree===false){
+    html += '<div class="card">'+bracket('var(--red)')+'<label style="font-family:var(--mono);font-size:9px;color:var(--mute)">TRIGGER, OPTIONAL</label><input class="input" id="smoke-trigger" value="'+(h.smokeTrigger||'')+'" placeholder="What happened"></div>';
+  }
+
+  html += sectionLabel('STAMINA PROTOCOL');
+  html += '<div class="grid2">';
+  html += '<div class="card">'+bracket('var(--border)')+['kegel','stopstart','abroller'].map(k=>checkHtml(k, {kegel:'Kegel 3x10',stopstart:'Stop-start practice',abroller:'Ab roller'}[k], h[k])).join('')+'</div>';
+  html += '<div class="card">'+bracket('var(--border)')+['matroutine','pushups','plank'].map(k=>checkHtml(k, {matroutine:'Mat routine',pushups:'Push-ups',plank:'Plank'}[k], h[k])).join('')+'</div>';
+  html += '</div>';
+
+  html += sectionLabel('MOVEMENT');
+  html += '<div class="card">'+bracket('var(--border)')+['tennis','running'].map(k=>checkHtml(k, {tennis:'Tennis',running:'Running'}[k], h[k])).join('')+'</div>';
+
+  html += sectionLabel('MONTH TO DATE');
+  const avg = monthAvg(healthScore, CURRENT_DATE.slice(0,7));
+  html += '<div class="card">'+bracket('var(--health)')+progressRow('Health consistency', avg, avg+'%', 'var(--health)')+'</div>';
+
+  html += '<button class="save-btn" id="save-health">Save today</button>';
+  s.innerHTML = html;
+
+  s.querySelectorAll('[data-toggle]').forEach(c=>{
+    c.addEventListener('click', ()=>{ const k=c.dataset.toggle; h[k]=!h[k]; renderHealth(); });
+  });
+  s.querySelectorAll('[data-cnt]').forEach(b=>{
+    b.addEventListener('click', ()=>{
+      const k=b.dataset.cnt, d=parseInt(b.dataset.d);
+      const max = k==='water'?5:2;
+      h[k] = Math.max(0, Math.min(max, (h[k]||0)+d));
+      renderHealth();
+    });
+  });
+  document.getElementById('save-health').addEventListener('click', ()=>{
+    h.bedtime = document.getElementById('bedtime-h').value+':'+document.getElementById('bedtime-m').value;
+    h.waketime = document.getElementById('waketime-h').value+':'+document.getElementById('waketime-m').value;
+    if(h.bedtime && h.waketime){
+      let diff = (24 - parseFloat(h.bedtime.replace(':','.'))) + parseFloat(h.waketime.replace(':','.'));
+      h.sleepHours = Math.round(diff*10)/10;
+    }
+    const trig = document.getElementById('smoke-trigger');
+    if(trig) h.smokeTrigger = trig.value;
+    saveDayNow();
+  });
+}
+function checkHtml(key, label, val){
+  return '<div class="checkline" data-toggle="'+key+'"><span class="box" style="color:'+(val?'var(--green)':'var(--mute)')+'">'+(val?'&#9632;':'&#9633;')+'</span>'+label+'</div>';
+}
+
+function openAddProjectModal(){
+  openModal(
+    '<div class="modal-title">Add project</div>'+
+    '<label style="font-family:var(--mono);font-size:9px;color:var(--mute)">NAME</label>'+
+    '<input class="input" id="np-name" placeholder="Song, EP, or album title">'+
+    '<label style="font-family:var(--mono);font-size:9px;color:var(--mute)">STATUS</label>'+
+    '<div class="btn-group"><button class="opt-btn sel" data-status="planned" id="np-planned">Planned</button><button class="opt-btn" data-status="active" id="np-active">Active</button></div>'+
+    '<div class="modal-actions"><button class="btn-cancel" id="np-cancel">Cancel</button><button class="btn-primary" id="np-save">Add</button></div>'
+  );
+  let status='planned';
+  document.getElementById('np-planned').addEventListener('click', function(){ status='planned'; this.classList.add('sel'); document.getElementById('np-active').classList.remove('sel'); });
+  document.getElementById('np-active').addEventListener('click', function(){ status='active'; this.classList.add('sel'); document.getElementById('np-planned').classList.remove('sel'); });
+  document.getElementById('np-cancel').addEventListener('click', closeModal);
+  document.getElementById('np-save').addEventListener('click', ()=>{
+    const name = document.getElementById('np-name').value.trim();
+    if(!name) return;
+    const list = DB.projects();
+    list.push({id:'p'+Date.now(), name:name, status:status, progress:0, lastTouched:todayStr()});
+    DB.saveProjects(list);
+    closeModal();
+    renderMusic();
+  });
+}
+function openUpdateProjectModal(id){
+  const list = DB.projects();
+  const p = list.find(x=>x.id===id);
+  if(!p) return;
+  openModal(
+    '<div class="modal-title">'+p.name+'</div>'+
+    '<label style="font-family:var(--mono);font-size:9px;color:var(--mute)">PROGRESS</label>'+
+    '<div class="btn-group">'+[0,25,50,75,100].map(v=>'<button class="opt-btn pct-btn'+(p.progress===v?' sel':'')+'" data-pct="'+v+'">'+v+'%</button>').join('')+'</div>'+
+    '<div class="modal-actions"><button class="btn-cancel" id="up-cancel">Cancel</button><button class="btn-primary" id="up-done">Mark done</button></div>'
+  );
+  document.getElementById('up-cancel').addEventListener('click', closeModal);
+  document.querySelectorAll('.pct-btn').forEach(b=>{
+    b.addEventListener('click', ()=>{
+      p.progress = parseInt(b.dataset.pct);
+      if(p.progress===100) p.status='done';
+      p.lastTouched = todayStr();
+      DB.saveProjects(list);
+      closeModal();
+      renderMusic();
+    });
+  });
+  document.getElementById('up-done').addEventListener('click', ()=>{
+    p.status='done'; p.progress=100; p.lastTouched=todayStr();
+    DB.saveProjects(list);
+    closeModal();
+    renderMusic();
+  });
+}
+function openTxModal(){
+  const cats = ['Rent','Food','Business costs','Transport','Weed','Cigarettes','Given to people','Home bills','Other'];
+  let type='expense', category=cats[0];
+  function render(){
+    let html = '<div class="modal-title">Log transaction</div>';
+    html += '<label style="font-family:var(--mono);font-size:9px;color:var(--mute)">TYPE</label>';
+    html += '<div class="btn-group">'+['deposit','withdraw','income','expense'].map(t=>'<button class="opt-btn tx-type'+(t===type?' sel':'')+'" data-type="'+t+'">'+t.charAt(0).toUpperCase()+t.slice(1)+'</button>').join('')+'</div>';
+    if(type==='expense'){
+      html += '<label style="font-family:var(--mono);font-size:9px;color:var(--mute)">CATEGORY</label>';
+      html += '<div class="btn-group">'+cats.map(c=>'<button class="opt-btn tx-cat'+(c===category?' sel':'')+'" data-cat="'+c+'">'+c+'</button>').join('')+'</div>';
+    }
+    html += '<label style="font-family:var(--mono);font-size:9px;color:var(--mute)">AMOUNT</label><input type="number" class="input" id="tx-amt" placeholder="0">';
+    html += '<div class="modal-actions"><button class="btn-cancel" id="tx-cancel">Cancel</button><button class="btn-primary" id="tx-save">Save</button></div>';
+    openModal(html);
+    document.getElementById('tx-cancel').addEventListener('click', closeModal);
+    document.querySelectorAll('.tx-type').forEach(b=>b.addEventListener('click', ()=>{ type=b.dataset.type; render(); }));
+    document.querySelectorAll('.tx-cat').forEach(b=>b.addEventListener('click', ()=>{ category=b.dataset.cat; render(); }));
+    document.getElementById('tx-save').addEventListener('click', ()=>{
+      const amount = parseFloat(document.getElementById('tx-amt').value);
+      if(isNaN(amount) || amount<=0) return;
+      const list = DB.transactions();
+      list.push({date:todayStr(), type:type, amount:amount, category: type==='expense'?category:''});
+      DB.saveTransactions(list);
+      day.finance.logged = true;
+      closeModal();
+      renderFinance();
+    });
+  }
+  render();
+}
+
+/* ============ MUSIC ============ */
+function renderMusic(){
+  const s = document.getElementById('s-music');
+  const projects = DB.projects();
+  const active = projects.filter(p=>p.status==='active');
+  const planned = projects.filter(p=>p.status==='planned');
+  const done = projects.filter(p=>p.status==='done');
+
+  let html = sectionLabel('ACTIVE PROJECTS','var(--music)');
+  html += '<button class="btn-ghost" id="add-project" style="border-color:var(--music);color:var(--music);margin-bottom:10px">+ Log or add project</button>';
+  html += '<div class="grid2">';
+  active.forEach(p=>{
+    html += '<div class="proj-card" data-proj="'+p.id+'">'+bracket('var(--music)')+'<div class="name">'+p.name+'</div><div class="bar-track"><div class="bar-fill" style="width:'+p.progress+'%;background:var(--music)"></div></div><div class="meta">'+p.progress+'%, touch to update</div></div>';
+  });
+  html += '</div>';
+  if(!active.length) html += '<div style="font-size:11px;color:var(--mute);margin-bottom:10px">No active projects yet.</div>';
+
+  html += sectionLabel('PLANNED');
+  html += '<div class="card">'+bracket('var(--border)')+(planned.length ? planned.map(p=>'<div class="checkline" data-plan="'+p.id+'"><span class="box">&#9633;</span>'+p.name+'</div>').join('') : '<div style="font-size:11px;color:var(--mute)">Nothing planned yet.</div>')+'</div>';
+
+  html += sectionLabel('DONE / HISTORY');
+  html += '<div class="card">'+bracket('var(--border)')+(done.length ? done.map(p=>'<div class="checkline"><span class="box" style="color:var(--green)">&#9632;</span>'+p.name+'</div>').join('') : '<div style="font-size:11px;color:var(--mute)">Nothing finished yet.</div>')+'</div>';
+
+  html += sectionLabel('TODAY');
+  html += '<div class="card">'+bracket('var(--border)')+
+    '<div class="checkline" data-toggle="sessionLogged"><span class="box" style="color:'+(day.music.sessionLogged?'var(--green)':'var(--mute)')+'">'+(day.music.sessionLogged?'&#9632;':'&#9633;')+'</span>Studio session today</div>';
+  if(day.music.sessionLogged){
+    html += '<label style="font-family:var(--mono);font-size:9px;color:var(--mute)">WORKED ON</label><select class="input" id="worked-on"><option value="">Select</option>';
+    active.forEach(p=>{ html += '<option value="'+p.id+'" '+(day.music.workedOn===p.id?'selected':'')+'>'+p.name+'</option>'; });
+    html += '<option value="instrumentals" '+(day.music.workedOn==='instrumentals'?'selected':'')+'>Instrumentals</option></select>';
+  }
+  html += '</div>';
+
+  html += sectionLabel('MONTH TO DATE');
+  const avg = monthAvg(musicScore, CURRENT_DATE.slice(0,7));
+  const allDaysMusic = DB.allDays();
+  const monthPrefixMusic = CURRENT_DATE.slice(0,7);
+  const instruCount = Object.keys(allDaysMusic).filter(k=>k.startsWith(monthPrefixMusic) && allDaysMusic[k].music && allDaysMusic[k].music.workedOn==='instrumentals').length;
+  html += '<div class="card">'+bracket('var(--music)')+progressRow('Session logging rate', avg, avg+'%', 'var(--music)')+
+    '<div style="display:flex;justify-content:space-between;padding-top:4px;font-size:11px;"><span>Instrumentals sessions</span><span style="font-family:var(--mono);color:var(--music)">'+instruCount+' this month</span></div></div>';
+
+  html += '<button class="save-btn" id="save-music">Save today</button>';
+  s.innerHTML = html;
+
+  document.getElementById('add-project').addEventListener('click', openAddProjectModal);
+  s.querySelectorAll('[data-proj]').forEach(c=>{
+    c.addEventListener('click', ()=>{ openUpdateProjectModal(c.dataset.proj); });
+  });
+  s.querySelectorAll('[data-plan]').forEach(c=>{
+    c.addEventListener('click', ()=>{
+      const list = DB.projects();
+      const p = list.find(x=>x.id===c.dataset.plan);
+      p.status='active';
+      DB.saveProjects(list);
+      renderMusic();
+    });
+  });
+  s.querySelectorAll('[data-toggle]').forEach(c=>{
+    c.addEventListener('click', ()=>{ day.music.sessionLogged=!day.music.sessionLogged; renderMusic(); });
+  });
+  document.getElementById('save-music').addEventListener('click', ()=>{
+    const wo = document.getElementById('worked-on');
+    if(wo) day.music.workedOn = wo.value;
+    if(day.music.workedOn && day.music.workedOn!=='instrumentals'){
+      const list = DB.projects();
+      const p = list.find(x=>x.id===day.music.workedOn);
+      if(p) p.lastTouched = todayStr();
+      DB.saveProjects(list);
+    }
+    saveDayNow();
+  });
+}
+
+/* ============ FINANCE ============ */
+function renderFinance(){
+  const s = document.getElementById('s-finance');
+  const goals = DB.goals();
+  const txs = DB.transactions();
+  const monthPrefix = CURRENT_DATE.slice(0,7);
+  const monthTx = txs.filter(t=>t.date.startsWith(monthPrefix));
+  const deposited = monthTx.filter(t=>t.type==='deposit').reduce((a,b)=>a+b.amount,0);
+  const withdrawn = monthTx.filter(t=>t.type==='withdraw').reduce((a,b)=>a+b.amount,0);
+  const income = monthTx.filter(t=>t.type==='income'||t.type==='withdraw').reduce((a,b)=>a+b.amount,0);
+  const expense = monthTx.filter(t=>t.type==='expense').reduce((a,b)=>a+b.amount,0);
+
+  let html = '<div class="grid2">';
+  html += '<div class="card stat-mini">'+bracket('var(--finance)')+'<div class="v" style="color:var(--finance);font-size:14px">'+deposited.toLocaleString()+'</div><div class="l">DEPOSITED</div></div>';
+  html += '<div class="card stat-mini">'+bracket('var(--finance)')+'<div class="v" style="color:var(--finance);font-size:14px">'+withdrawn.toLocaleString()+'</div><div class="l">WITHDRAWN</div></div>';
+  html += '</div>';
+  html += '<div class="card stat-mini" style="margin-top:10px">'+bracket('var(--border)')+'<div class="v" style="font-size:14px">'+(income-expense).toLocaleString()+'</div><div class="l">NET, INCOME MINUS EXPENSE</div></div>';
+
+  html += sectionLabel('MONTHLY TRADING GOAL','var(--finance)');
+  const tgtPct = goals.trading ? Math.min(100, Math.round(withdrawn/goals.trading*100)) : 0;
+  html += '<div class="card">'+bracket('var(--border)')+
+    '<label style="font-family:var(--mono);font-size:9px;color:var(--mute)">TARGET THIS MONTH</label><input type="number" class="input" id="trading-goal" value="'+(goals.trading||'')+'" placeholder="Withdrawal target">'+
+    progressRow('Progress', tgtPct, withdrawn.toLocaleString()+' of '+(goals.trading||0).toLocaleString(), 'var(--finance)')+'</div>';
+
+  html += sectionLabel('LONG-RANGE GOAL');
+  const lrPct = goals.longrange ? Math.min(100, Math.round((goals.savedSoFar||0)/goals.longrange*100)) : 0;
+  html += '<div class="card">'+bracket('var(--border)')+
+    '<label style="font-family:var(--mono);font-size:9px;color:var(--mute)">TARGET FIGURE</label><input type="number" class="input" id="longrange-goal" value="'+(goals.longrange||'')+'" placeholder="Set your target">'+
+    progressRow('Savings progress', lrPct, (goals.savedSoFar||0).toLocaleString()+' of '+(goals.longrange||0).toLocaleString(), 'var(--finance)')+'</div>';
+
+  html += sectionLabel('LOG A TRANSACTION');
+  html += '<button class="btn-ghost" id="add-tx" style="border-color:var(--finance);color:var(--finance)">+ Log deposit, withdrawal, income, or expense</button>';
+
+  html += sectionLabel('SPENDING BREAKDOWN, THIS MONTH');
+  const cats = ['Rent','Food','Business costs','Transport','Weed','Cigarettes','Given to people','Home bills','Other'];
+  html += '<div class="card">'+bracket('var(--border)')+cats.map(c=>{
+    const t = monthTx.filter(x=>x.type==='expense'&&x.category===c).reduce((a,b)=>a+b.amount,0);
+    return '<div class="stat-row"><span>'+c+'</span><span style="color:var(--finance);font-family:var(--mono)">'+(t?t.toLocaleString():'-')+'</span></div>';
+  }).join('')+'</div>';
+
+  html += sectionLabel('MONTH TO DATE');
+  const avg = monthAvg(financeScore, monthPrefix);
+  html += '<div class="card">'+bracket('var(--finance)')+progressRow('Logging consistency', avg, avg+'%', 'var(--finance)')+'</div>';
+
+  html += '<button class="save-btn" id="save-finance">Save today</button>';
+  s.innerHTML = html;
+
+  document.getElementById('add-tx').addEventListener('click', openTxModal);
+  document.getElementById('save-finance').addEventListener('click', ()=>{
+    const g = DB.goals();
+    g.trading = parseFloat(document.getElementById('trading-goal').value)||0;
+    g.longrange = parseFloat(document.getElementById('longrange-goal').value)||0;
+    DB.saveGoals(g);
+    saveDayNow();
+  });
+}
+
+/* ============ GROWTH ============ */
+function renderGrowth(){
+  const s = document.getElementById('s-growth');
+  const g = day.growth;
+  const groups = [
+    ['FRAME AND PRESENCE', [['frame','Frame with women'],['eyecontact','Eye contact and presence'],['posture','Posture and presence check']]],
+    ['MIND AND CONTROL', [['metacognition','Metacognition'],['impulse','Impulse control'],['delayedgrat','Delayed gratification'],['nameemotion','Naming emotion before reacting']]],
+    ['CONFIDENCE AND INITIATIVE', [['spokeup','Spoke up'],['initiated','Initiated instead of waited'],['fear','Did something despite fear']]],
+    ['DISCIPLINE', [['words','Economy of words'],['listening','Active listening'],['rehearsal','Mental rehearsal'],['strictself','Strict with myself'],['strictothers','Strict with others']]]
+  ];
+  let html = '';
+  groups.forEach(gr=>{
+    html += sectionLabel(gr[0], 'var(--growth)');
+    html += '<div class="card">'+bracket('var(--border)')+gr[1].map(x=>checkHtml(x[0], x[1], g[x[0]])).join('')+'</div>';
+  });
+
+  html += sectionLabel('MONTH TO DATE');
+  const avg = monthAvg(growthScore, CURRENT_DATE.slice(0,7));
+  html += '<div class="card">'+bracket('var(--growth)')+progressRow('Growth consistency', avg, avg+'%', 'var(--growth)')+'</div>';
+
+  html += '<button class="save-btn" id="save-growth">Save today</button>';
+  s.innerHTML = html;
+
+  s.querySelectorAll('[data-toggle]').forEach(c=>{
+    c.addEventListener('click', ()=>{ const k=c.dataset.toggle; g[k]=!g[k]; renderGrowth(); });
+  });
+  document.getElementById('save-growth').addEventListener('click', saveDayNow);
+}
+
+/* ============ NAV AND INIT ============ */
+function renderAll(){ renderHome(); renderFaith(); renderHealth(); renderMusic(); renderFinance(); renderGrowth(); }
+
+function goTab(tab){
+  document.querySelectorAll('.screen').forEach(sc=>sc.classList.remove('active'));
+  document.querySelectorAll('.nb').forEach(b=>b.style.color='var(--mute)');
+  document.getElementById('s-'+tab).classList.add('active');
+  const btn = document.querySelector('.nb[data-tab="'+tab+'"]');
+  if(btn) btn.style.color = getComputedStyle(document.documentElement).getPropertyValue('--'+tab);
+}
+document.querySelectorAll('.nb').forEach(btn=>{
+  btn.addEventListener('click', ()=> goTab(btn.dataset.tab));
+});
+document.getElementById('fab-btn').addEventListener('click', ()=>{
+  const opts = [['faith','Faith'],['health','Health'],['music','Music'],['finance','Finance'],['growth','Growth']];
+  openModal(
+    '<div class="modal-title">Quick log</div>'+
+    '<div class="btn-group" style="flex-direction:column">'+opts.map(o=>'<button class="opt-btn" style="text-align:left" onclick="goTab(\''+o[0]+'\');closeModal();">'+o[1]+'</button>').join('')+'</div>'
+  );
+});
+
+if('serviceWorker' in navigator){
+  window.addEventListener('load', ()=>{ navigator.serviceWorker.register('sw.js').catch(()=>{}); });
+}
+
+renderAll();
+</script>
+</body>
+</html>
