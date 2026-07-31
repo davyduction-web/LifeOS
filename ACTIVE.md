@@ -1,11 +1,28 @@
 # LIFE OS — ACTIVE PROJECT FILE
 > Created: 2026-07-25
-> Status: FIRST BUILD — functional locally, not yet tested on Davydenko's
-> phone, not yet deployed anywhere. This is a separate project from the
-> TradingJournal and from Davydenko's personal life documentation files
-> (Personal/PERSONAL-MASTER.md etc.) — though it was designed directly
-> from what's documented there, and from THE_CODE.pdf / Daily_Operations_Schedule.pdf
-> (see Personal/ folder for those).
+> **Status: COMPLETE, deployed, in daily use.** Feature-complete, visually
+> unified, live at https://davyduction-web.github.io/LifeOS. One minor
+> open item (Swalat countdown accuracy spot-check). No active development
+> queue as of 2026-07-28.
+>
+> **Context for future sessions:** this app is ONE SMALL PIECE of
+> Davydenko's broader personal life documentation, not the center of it.
+> The personal documentation itself lives in Personal/PERSONAL-MASTER.md
+> and related files — that is the primary, ongoing body of work. LifeOS
+> was built as a tool to track daily execution against what's documented
+> there. Do not assume a new conversation is about LifeOS by default —
+> read PERSONAL-MASTER.md and CLAUDE-DESKTOP.md first per the normal
+> session-start process, and only come to this file if the conversation
+> is actually about the app itself (a bug, a feature request, a design
+> change). This app being finished does not mean the broader personal
+> work is finished — it almost certainly isn't, and shouldn't be treated
+> as closed just because this one tool is.
+>
+> This is a separate project from the TradingJournal and from Davydenko's
+> personal life documentation files (Personal/PERSONAL-MASTER.md etc.) —
+> though it was designed directly from what's documented there, and from
+> THE_CODE.pdf / Daily_Operations_Schedule.pdf (see Personal/ folder for
+> those).
 
 ---
 
@@ -906,16 +923,21 @@ for what's actually true today)
 
 ---
 
-## OPEN ITEMS (genuinely the only two things not fully closed)
+## LIVE URL
+
+**https://davyduction-web.github.io/LifeOS** — confirmed working by
+Davydenko 2026-07-28 (he had been opening the github.com/davyduction-web/
+LifeOS *code repository* page by mistake, not the live Pages URL — these
+are different addresses, common mix-up, resolved). This is the URL to use
+for Add to Home Screen and any future sharing/testing.
+
+## OPEN ITEMS (genuinely the only thing not fully closed)
 
 1. **Swalat countdown accuracy** — built and rendering, but the actual
    calculated prayer times have not been independently checked against a
    real source. Ask Davydenko to compare against a trusted prayer-times
    app/site next time he has Life OS open near a prayer time, and report
    back if anything is off by more than a couple minutes.
-2. **The Pages URL has never actually been logged here** — asked for
-   multiple times across sessions, still not captured. Low priority but
-   trivial to fix — just ask directly next time and paste it below.
 
 Everything else from every design conversation, every locked decision,
 and every feature request across the whole project history is built and

@@ -5,9 +5,11 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <meta name="theme-color" content="#050605">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
 <meta name="apple-mobile-web-app-title" content="Life OS">
 <link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=DM+Serif+Display&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 <title>Life OS</title>
@@ -15,7 +17,7 @@
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
   --bg:#050605;--card:#0B0E0C;--border:#1A2E28;
-  --text:#E4F5EC;--mute:#5E756A;
+  --text:#E4F5EC;--mute:#6B8278;
   --cyan:#3DDCEC;--green:#3DDC97;--red:#E06868;--amber:#E0B454;
   --faith:#3DDC97;--health:#E08A54;--music:#E0B454;--finance:#5CA0E0;--growth:#B08CE0;--home:#3DDCEC;--review:#3DDCEC;
   --serif:'DM Serif Display',serif;--mono:'Space Mono',monospace;--sans:'Space Grotesk',sans-serif;
@@ -27,7 +29,7 @@
   --on-accent:#04120C;--delta-up-bg:#1E2A21;--delta-dn-bg:#2A1414
 }
 [data-theme="light"]{
-  --bg:#EDEEED;--card:#F8FAF8;--border:#C4D8CE;--text:#0D1C14;--mute:#7A9A8A;
+  --bg:#EDEEED;--card:#F8FAF8;--border:#C4D8CE;--text:#0D1C14;--mute:#4D6058;
   --cyan:#3098B0;--green:#2EAA70;--red:#C87070;--amber:#A89030;
   --faith:#2EAA70;--health:#CC6840;--music:#A89030;--finance:#4278CC;--growth:#8056CC;--home:#3098B0;--review:#3098B0;
   --card-bg:rgba(248,250,248,.97);--card-border:rgba(0,0,0,.05);--card-shadow:0 2px 20px rgba(0,0,0,.07),0 1px 3px rgba(0,0,0,.04);
@@ -38,7 +40,12 @@
 }
 html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14px;overflow:hidden}
 .app{display:flex;flex-direction:column;height:100%;max-width:430px;margin:0 auto;position:relative;border-left:1px solid var(--border);border-right:1px solid var(--border)}
-.hdr{display:flex;justify-content:space-between;align-items:center;padding:0 18px;height:var(--hdr);border-bottom:1px solid var(--border);flex-shrink:0}
+.hdr{display:flex;justify-content:space-between;align-items:center;padding:0 18px;height:var(--hdr);border-bottom:1px solid var(--border);flex-shrink:0;position:relative}
+.hdr-logo{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:44px;height:44px;object-fit:contain;pointer-events:none}
+#edit-banner{display:flex;align-items:center;justify-content:space-between;padding:6px 18px;background:var(--amber);flex-shrink:0}
+#edit-banner span{font-family:var(--mono);font-size:9px;color:#111;letter-spacing:1px}
+#edit-banner button{font-family:var(--mono);font-size:9px;color:#111;background:rgba(0,0,0,0.12);border:none;border-radius:6px;padding:4px 10px;cursor:pointer;letter-spacing:1px}
+#edit-banner.hidden{display:none}
 .hdr .brand-mini{font-size:9px;letter-spacing:3px;color:var(--green)}
 .hdr .brand-title{font-family:var(--serif);font-size:16px;margin-top:2px}
 .hdr .status{display:flex;align-items:center;gap:5px}
@@ -56,7 +63,13 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
 .section-label .sq{width:6px;height:6px;flex-shrink:0}
 .section-label span{font-family:var(--mono);font-size:10px;letter-spacing:2px;color:var(--mute)}
 .section-label .ln{flex:1;height:1px;background:var(--border)}
-.card{position:relative;background:var(--card-bg);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid var(--card-border);border-radius:20px;padding:14px 16px;margin-bottom:10px;box-shadow:var(--card-shadow)}
+.card{position:relative;background:var(--card-bg);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);border:1px solid var(--card-border);border-radius:20px;padding:14px 16px;margin-bottom:10px;box-shadow:var(--card-shadow)}
+.card-shell{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:26px;padding:5px;margin-bottom:10px}
+.card-shell>.card{border-radius:21px;margin-bottom:0;box-shadow:var(--card-shadow),inset 0 1px 1px rgba(255,255,255,0.1)}
+[data-theme="light"] .card-shell{background:rgba(0,0,0,0.02);border-color:rgba(0,0,0,0.06)}
+.card-animate{opacity:0;transform:translateY(12px);filter:blur(4px);transition:opacity 350ms ease-out,transform 350ms ease-out,filter 350ms ease-out}
+.card-animate.visible{opacity:1;transform:translateY(0);filter:blur(0)}
+@media(prefers-reduced-motion:reduce){.card-animate{transform:none;filter:none;transition:opacity 200ms ease-out}}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
 .grid5{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
@@ -73,7 +86,8 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
 .tristate:last-child{border-bottom:none}
 .tristate .lbl{font-size:11.5px}
 .tristate .pills{display:flex;gap:5px}
-.pill{font-size:9px;font-family:var(--mono);padding:3px 8px;border-radius:10px;border:1px solid var(--border);color:var(--mute);cursor:pointer;background:transparent}
+.pill{font-size:9px;font-family:var(--mono);padding:3px 8px;border-radius:10px;border:1px solid var(--border);color:var(--mute);cursor:pointer;background:transparent;position:relative}
+.pill::before{content:'';position:absolute;inset:-14px -8px}
 .progress-row{padding:9px 0;border-bottom:1px solid var(--sep)}
 .progress-row:last-child{border-bottom:none}
 .progress-row .top{display:flex;justify-content:space-between;font-size:11px;margin-bottom:6px}
@@ -89,7 +103,8 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
 .count-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--sep)}
 .count-row:last-child{border-bottom:none}
 .count-btns{display:flex;gap:6px;align-items:center}
-.count-btns button{width:22px;height:22px;border-radius:5px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;font-size:12px}
+.count-btns button{width:22px;height:22px;border-radius:5px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;font-size:12px;position:relative}
+.count-btns button::before{content:'';position:absolute;inset:-11px}
 .count-val{font-family:var(--mono);font-size:12px;min-width:16px;text-align:center}
 .cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
 .cd{aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:2px;background:var(--card);border:1px solid var(--border);cursor:pointer}
@@ -110,20 +125,23 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
 .modal-actions button{flex:1;padding:11px;border-radius:6px;border:1px solid var(--border);font-family:var(--sans);font-weight:700;font-size:12px;cursor:pointer}
 .btn-primary{background:var(--green);color:var(--on-accent);border:none !important}
 .btn-cancel{background:var(--card);color:var(--mute)}
-.save-btn,.btn-ghost,.opt-btn,.nb{transition:transform .12s ease}
-.save-btn:active,.btn-ghost:active,.opt-btn:active{transform:scale(0.96)}
-.nb:active{transform:scale(0.9)}
+button{transition:transform .12s ease}
+button:active{transform:scale(0.96)}
+.save-btn,.btn-ghost,.opt-btn,.nb,.btn-primary,.btn-cancel,.count-btns button{transition:transform .12s ease}
+.save-btn:active,.btn-ghost:active,.opt-btn:active,.btn-primary:active,.btn-cancel:active,.count-btns button:active{transform:scale(0.96)}
+.nb:active{transform:scale(0.96)}
 .btn-ghost,.opt-btn{box-shadow:var(--btn-depth)}
 .flame-wrap{width:40px;height:40px;margin:0 auto 6px;border-radius:50%;display:flex;align-items:center;justify-content:center}
 .fab{position:absolute;left:50%;top:-22px;transform:translateX(-50%);width:50px;height:50px;border-radius:50%;background:var(--cyan);border:3px solid var(--bg);display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:var(--fab-glow);transition:transform .12s ease}
-.fab:active{transform:translateX(-50%) scale(0.92)}
-.fab svg{width:22px;height:22px;color:var(--on-accent)}
+.fab:active{transform:translateX(-50%) scale(0.96)}
+.fab svg{width:22px;height:22px;color:var(--on-accent);transition:transform .2s cubic-bezier(0.34,1.56,0.64,1)}
+@media(hover:hover){.fab:hover svg{transform:translateX(1px) translateY(-1px) scale(1.1)}}
 .delta-pill{display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:3px 9px;border-radius:10px;font-family:var(--mono)}
 .trend-labels{display:flex;justify-content:space-between;font-family:var(--mono);font-size:8px;color:var(--mute);margin-top:4px}
 .cal2{display:flex;flex-direction:column;gap:4px;overflow:visible}
 .cal-week{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;overflow:visible}
-.cal-card2{aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:7px;cursor:pointer;transition:transform .1s;gap:1px}
-.cal-card2:active{transform:scale(0.92)}
+.cal-card2{aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:7px;cursor:pointer;transition:transform .12s ease;gap:1px}
+.cal-card2:active{transform:scale(0.96)}
 .cal-bubble-cell{aspect-ratio:1;display:flex;align-items:center;justify-content:center;position:relative;overflow:visible;cursor:pointer}
 .cal-rollup{height:3px;border-radius:2px;background:var(--track-bg);margin:2px 0 6px;overflow:hidden}
 .cal-rollup-fill{height:100%;border-radius:2px}
@@ -144,7 +162,13 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
 <div class="app">
   <div class="hdr">
     <div><div class="brand-mini">DAVYDENKO</div><div class="brand-title">Life OS</div></div>
+    <img src="image_holographic_logo-825a1b.png" class="hdr-logo" alt="Life OS logo">
     <div class="status"><div class="dot"></div><span class="status-text">SYSTEM ONLINE</span></div>
+  </div>
+
+  <div id="edit-banner" class="hidden">
+    <span id="edit-banner-label"></span>
+    <button onclick="exitEditMode()" id="edit-banner-btn">Back to Today</button>
   </div>
 
   <div class="screens">
@@ -203,9 +227,11 @@ const DB = {
 };
 
 function todayStr(){ return new Date().toISOString().slice(0,10); }
-let CURRENT_DATE = todayStr();
-let day = DB.day(CURRENT_DATE);
+const TODAY = todayStr();
+let EDIT_DATE = todayStr();
+let day = DB.day(EDIT_DATE);
 let plankTimer = {running:false, start:null, elapsed:0, iv:null};
+let neglectDismissed = false;
 let cmpOffset = {faith:1, health:1, music:1, finance:1, growth:1};
 let reviewWeekOffset = 0;
 let calMonthOffset = 0;
@@ -253,7 +279,7 @@ function monthAvg(scoreFn, monthPrefix){
   return Math.round(sum/keys.length);
 }
 function prevMonthPrefix(){
-  const d = new Date(CURRENT_DATE+' 00:00:00');
+  const d = new Date(EDIT_DATE+' 00:00:00');
   d.setDate(1); d.setMonth(d.getMonth()-1);
   return d.toISOString().slice(0,7);
 }
@@ -305,9 +331,9 @@ function ringSvg(pct,color,val,size,color2){
     '<circle cx="'+size/2+'" cy="'+size/2+'" r="'+r+'" fill="none" stroke="url(#'+gid+')" stroke-width="'+sw+'" stroke-linecap="round" stroke-dasharray="'+c+'" stroke-dashoffset="'+off+'" transform="rotate(-90 '+size/2+' '+size/2+')"></circle>'+
     '<text x="'+size/2+'" y="'+(size/2+5)+'" text-anchor="middle" font-size="'+fontSize+'" font-weight="700" fill="var(--text)" font-family="DM Serif Display,serif">'+val+'</text></svg></span>';
 }
-function computeStreak(testFn){
+function computeStreak(testFn, fromDate){
   const all = DB.allDays();
-  let d = new Date(CURRENT_DATE);
+  let d = new Date(fromDate||EDIT_DATE);
   let count = 0;
   while(true){
     const ds = d.toISOString().slice(0,10);
@@ -572,7 +598,12 @@ function waveBannerHtml(message, subtext, color, color2){
     '</div>'+
     '</div>';
 }
-function saveDayNow(){ DB.saveDay(CURRENT_DATE, day); renderAll(); }
+function saveDayNow(){ DB.saveDay(EDIT_DATE, day); renderAll(); }
+function saveBtnLabel(){
+  if(EDIT_DATE === TODAY) return 'Save today';
+  const d = new Date(EDIT_DATE+'T00:00:00');
+  return 'Save '+d.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+}
 function setTheme(theme){
   localStorage.setItem('lo_theme', theme);
   if(theme==='light'){ document.documentElement.setAttribute('data-theme','light'); }
@@ -690,7 +721,7 @@ function importDataFile(file){
       localStorage.setItem('lo_projects', JSON.stringify(parsed.projects||[]));
       localStorage.setItem('lo_transactions', JSON.stringify(parsed.transactions||[]));
       localStorage.setItem('lo_goals', JSON.stringify(parsed.goals||{trading:0,longrange:0,savedSoFar:0,tradingWithdrawn:0}));
-      day = DB.day(CURRENT_DATE);
+      day = DB.day(EDIT_DATE);
       closeModal();
       renderAll();
     });
@@ -709,7 +740,10 @@ function openDayDetail(dateStr){
   const dateObj = new Date(dateStr+'T00:00:00');
   const label = dateObj.toDateString();
   if(!rec){
-    openModal('<div class="modal-title">'+label+'</div><div style="font-size:12px;color:var(--mute)">Nothing was logged this day.</div><div class="modal-actions"><button class="btn-primary" onclick="closeModal()">Close</button></div>');
+    let _ea='<div class="modal-actions">';
+    if(dateStr!==TODAY) _ea+='<button class="btn-ghost" onclick="enterEditMode(\''+dateStr+'\')">Edit this day</button>';
+    _ea+='<button class="btn-primary" onclick="closeModal()">Close</button></div>';
+    openModal('<div class="modal-title">'+label+'</div><div style="font-size:12px;color:var(--mute)">Nothing was logged this day.</div>'+_ea);
     return;
   }
   const sc = dayScore(rec);
@@ -780,7 +814,10 @@ function openDayDetail(dateStr){
   const growthDone = Object.keys(growthLabels).filter(k=>rec.growth[k]).map(k=>growthLabels[k]);
   html += '<div style="font-size:11px;color:var(--text)">'+(growthDone.length?growthDone.join(', '):'Nothing logged')+'</div>';
 
-  html += '<div class="modal-actions"><button class="btn-primary" onclick="closeModal()">Close</button></div>';
+  let _actions = '<div class="modal-actions">';
+  if(dateStr !== TODAY) _actions += '<button class="btn-ghost" onclick="enterEditMode(\''+dateStr+'\')">Edit this day</button>';
+  _actions += '<button class="btn-primary" onclick="closeModal()">Close</button></div>';
+  html += _actions;
   openModal(html);
 }
 
@@ -794,7 +831,7 @@ function cmpRow(label, refVal, todayVal){
 }
 function compareDayHtml(tab, color){
   const offset=cmpOffset[tab];
-  const rd=new Date(CURRENT_DATE); rd.setDate(rd.getDate()-offset);
+  const rd=new Date(EDIT_DATE); rd.setDate(rd.getDate()-offset);
   const refStr=rd.toISOString().slice(0,10);
   const refRec=DB.allDays()[refStr]||null;
   const refLabel=offset===1?'YESTERDAY':rd.toLocaleDateString('en-US',{month:'short',day:'numeric'}).toUpperCase();
@@ -840,7 +877,7 @@ function compareDayHtml(tab, color){
   else if(tab==='finance'){
     const txs=DB.transactions();
     const rTx=txs.filter(t=>t.date===refStr);
-    const tTx=txs.filter(t=>t.date===CURRENT_DATE);
+    const tTx=txs.filter(t=>t.date===EDIT_DATE);
     const rTot=rTx.filter(t=>t.type==='expense').reduce((a,b)=>a+b.amount,0);
     const tTot=tTx.filter(t=>t.type==='expense').reduce((a,b)=>a+b.amount,0);
     rows+=cmpRow('Total spend',
@@ -869,7 +906,7 @@ function compareDayHtml(tab, color){
     '<div style="flex:1;text-align:center;font-family:var(--mono);font-size:9px;letter-spacing:1px">'+
     '<span style="color:'+color+'">'+refLabel+'</span>'+
     '<span style="color:var(--mute)"> &middot; vs &middot; </span>'+
-    '<span style="color:var(--text)">TODAY</span>'+
+    '<span style="color:var(--text)">'+(EDIT_DATE===TODAY?'TODAY':new Date(EDIT_DATE+'T00:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}).toUpperCase())+'</span>'+
     '</div>'+
     '<button data-cmp-fwd style="'+ab+'color:'+(offset<=1?'var(--border)':'var(--text)')+'">&#8594;</button>'+
     '</div>'+rows+'</div>';
@@ -973,12 +1010,15 @@ function calendarHtml(all, calY, calM, calMode){
 /* ============ HOME ============ */
 function renderHome(){
   const s = document.getElementById('s-home');
-  const scores = {faith:faithScore(day), health:healthScore(day), music:musicScore(day), finance:financeScore(day), growth:growthScore(day)};
-  const total = dayScore(day);
-  const monthPrefix = CURRENT_DATE.slice(0,7);
+  const todayRec = DB.day(TODAY);
+  const scores = {faith:faithScore(todayRec), health:healthScore(todayRec), music:musicScore(todayRec), finance:financeScore(todayRec), growth:growthScore(todayRec)};
+  const total = dayScore(todayRec);
+  const monthPrefix = TODAY.slice(0,7);
   const cats = [['Faith','var(--faith)',scores.faith],['Health','var(--health)',scores.health],['Music','var(--music)',scores.music],['Finance','var(--finance)',scores.finance],['Growth','var(--growth)',scores.growth]];
   let html = '<div class="datebar">'+new Date().toDateString().toUpperCase()+'</div>';
-  const yDate = new Date(CURRENT_DATE); yDate.setDate(yDate.getDate()-1);
+  const _neglect=neglectBannerHtml(computeNeglectGaps());
+  html += _neglect ? '<div class="card-shell">'+_neglect+'</div>' : '';
+  const yDate = new Date(TODAY); yDate.setDate(yDate.getDate()-1);
   const yStr = yDate.toISOString().slice(0,10);
   const yRec = DB.allDays()[yStr];
   const yScore = yRec ? dayScore(yRec) : null;
@@ -986,14 +1026,14 @@ function renderHome(){
   const deltaHtml = delta===null ? '<span class="delta-pill" style="background:var(--track-bg);color:var(--mute)">No data yesterday</span>' :
     delta>=0 ? '<span class="delta-pill" style="background:var(--delta-up-bg);color:var(--green)">&#8593; '+delta+' vs yesterday</span>' :
     '<span class="delta-pill" style="background:var(--delta-dn-bg);color:var(--red)">&#8595; '+Math.abs(delta)+' vs yesterday</span>';
-  html += '<div class="card">'+'<div style="display:flex;align-items:center;gap:14px">'+ringSvg(total,'var(--home)',total,80)+
+  html += '<div class="card-shell"><div class="card">'+'<div style="display:flex;align-items:center;gap:14px">'+ringSvg(total,'var(--home)',total,80)+
     '<div><div style="font-family:var(--mono);font-size:9px;color:var(--mute)">CODE SCORE TODAY</div>'+
     '<div style="margin-top:6px">'+deltaHtml+'</div>'+
     '<div style="font-family:var(--mono);font-size:9px;color:var(--mute);margin-top:8px">Faith '+scores.faith+' / Health '+scores.health+' / Music '+scores.music+'</div>'+
-    '<div style="font-family:var(--mono);font-size:9px;color:var(--mute);margin-top:2px">Finance '+scores.finance+' / Growth '+scores.growth+'</div></div></div></div>';
+    '<div style="font-family:var(--mono);font-size:9px;color:var(--mute);margin-top:2px">Finance '+scores.finance+' / Growth '+scores.growth+'</div></div></div></div></div>';
 
-  const fBStreak=computeStreak(r=>r.faith&&r.faith.fajr==='caught');
-  const sBStreak=computeStreak(r=>r.health&&r.health.smokeFree===true);
+  const fBStreak=computeStreak(r=>r.faith&&r.faith.fajr==='caught',TODAY);
+  const sBStreak=computeStreak(r=>r.health&&r.health.smokeFree===true,TODAY);
   if(fBStreak>0||sBStreak>0){
     const useFajr=fBStreak>=sBStreak&&fBStreak>0;
     html+=waveBannerHtml(
@@ -1006,7 +1046,7 @@ function renderHome(){
 
   const trendDays = [];
   for(let i=6;i>=0;i--){
-    const dd = new Date(CURRENT_DATE); dd.setDate(dd.getDate()-i);
+    const dd = new Date(TODAY); dd.setDate(dd.getDate()-i);
     const ds = dd.toISOString().slice(0,10);
     const rec = DB.allDays()[ds];
     trendDays.push({date:dd, score: rec?dayScore(rec):null});
@@ -1077,7 +1117,7 @@ function renderHome(){
   });
   html += '</div>';
 
-  const yearPrefix = CURRENT_DATE.slice(0,4);
+  const yearPrefix = TODAY.slice(0,4);
   html += sectionLabel('THIS YEAR BY CATEGORY');
   html += '<div class="cat-scroll">';
   cats.forEach(c=>{
@@ -1093,7 +1133,7 @@ function renderHome(){
   html += '<div class="card">'+triCircleHtml(convCount,'3+ CATS ≥80 · '+convKeys.length+' DAYS LOGGED')+'</div>';
 
   const calMode = localStorage.getItem('lo_cal_mode')||'cards';
-  const calDate = new Date(new Date(CURRENT_DATE).getFullYear(), new Date(CURRENT_DATE).getMonth()-calMonthOffset, 1);
+  const calDate = new Date(new Date(TODAY).getFullYear(), new Date(TODAY).getMonth()-calMonthOffset, 1);
   const calY = calDate.getFullYear();
   const calM = calDate.getMonth()+1;
   const calMonthName = calDate.toLocaleDateString('en-US',{month:'long'});
@@ -1110,9 +1150,9 @@ function renderHome(){
 
   html += sectionLabel('STILL OPEN TODAY');
   let open = [];
-  if(!day.music.sessionLogged) open.push('Music session not logged');
-  if(!day.finance.logged) open.push('Finance not logged today');
-  if(!Object.keys(day.faith).length) open.push('Prayers not set today');
+  if(!todayRec.music.sessionLogged) open.push('Music session not logged');
+  if(!todayRec.finance.logged) open.push('Finance not logged today');
+  if(!Object.keys(todayRec.faith).length) open.push('Prayers not set today');
   html += '<div class="card">'+(open.length ? open.map(o=>'<div class="checkline"><span class="box">&#9633;</span>'+o+'</div>').join('') : '<div style="font-size:11px;color:var(--mute)">Everything logged for today.</div>')+'</div>';
 
   html += sectionLabel('APPEARANCE');
@@ -1126,7 +1166,7 @@ function renderHome(){
     '</div></div></div>';
 
   html += sectionLabel('SECURITY');
-  html += '<div class="card" style="text-align:center"><div id="home-faceid-toggle"></div></div>';
+  html += '<div class="card" style="text-align:center"><div id="home-faceid-toggle"></div><div id="home-notif-toggle" style="margin-top:8px"></div></div>';
 
   html += sectionLabel('BACKUP AND RESTORE');
   const lastExp = localStorage.getItem('lo_last_export_at');
@@ -1141,6 +1181,10 @@ function renderHome(){
 
   s.innerHTML = html;
   renderFaceIdToggle();
+  renderNotifToggle();
+  const neglectDismissBtn=document.getElementById('neglect-dismiss');
+  if(neglectDismissBtn) neglectDismissBtn.addEventListener('click',()=>{neglectDismissed=true;renderHome();});
+  s.querySelectorAll('[data-neglect-tab]').forEach(r=>{r.addEventListener('click',()=>goTab(r.dataset.neglectTab));});
 
   s.querySelectorAll('[data-date]').forEach(c=>{
     c.addEventListener('click', ()=> openDayDetail(c.dataset.date));
@@ -1160,6 +1204,7 @@ function renderHome(){
   document.querySelectorAll('.theme-btn').forEach(b=>{
     b.addEventListener('click', ()=> setTheme(b.dataset.themeVal));
   });
+  patchAriaRoles(s);
 }
 
 /* ============ PRAYER TIMES (Kigali, MWL method) ============ */
@@ -1201,12 +1246,12 @@ function calcPrayerTimes(dateStr){
 function renderFaithCountdown(){
   const el=document.getElementById('swalat-cd');
   if(!el)return;
-  const pt=calcPrayerTimes(CURRENT_DATE);
+  const pt=calcPrayerTimes(TODAY);
   const names=['fajr','dhuhr','asr','maghrib','isha'];
   const labels={fajr:'Fajr',dhuhr:'Dhuhr',asr:'Asr',maghrib:'Maghrib',isha:'Isha'};
   const utcK={fajr:'fajrUTC',dhuhr:'dhuhrUTC',asr:'asrUTC',maghrib:'maghribUTC',isha:'ishaUTC'};
   const now=Date.now();
-  const base=new Date(CURRENT_DATE+'T00:00:00Z').getTime();
+  const base=new Date(TODAY+'T00:00:00Z').getTime();
   let nextName=null,nextMs=null,nextDisp=null;
   for(const n of names){
     const u=pt[utcK[n]];
@@ -1270,7 +1315,7 @@ function renderFaith(){
   html += '<div class="card">'+'<textarea class="input textarea" id="faith-reflection" placeholder="How did it feel today">'+(day.faith.reflection||'')+'</textarea></div>';
 
   html += sectionLabel('MONTH TO DATE');
-  const monthPrefix = CURRENT_DATE.slice(0,7);
+  const monthPrefix = EDIT_DATE.slice(0,7);
   const avg = monthAvg(faithScore, monthPrefix);
   html += '<div class="card">'+progressRow('Faith consistency', avg, avg+'%', 'var(--faith)')+'</div>';
 
@@ -1278,7 +1323,7 @@ function renderFaith(){
   html += sectionLabel('THIS MONTH VS LAST MONTH','var(--faith)');
   html += '<div class="card">'+momCompareHtml(avg, faithPrevAvg, 'var(--faith)')+'</div>';
 
-  html += '<button class="save-btn" id="save-faith">Save today</button>';
+  html += '<button class="save-btn" id="save-faith">'+saveBtnLabel()+'</button>';
   s.innerHTML = html;
   wireCmpArrows(s, 'faith', renderFaith);
 
@@ -1292,6 +1337,7 @@ function renderFaith(){
     day.faith.reflection = document.getElementById('faith-reflection').value;
     saveDayNow();
   });
+  patchAriaRoles(s);
 }
 
 /* ============ HEALTH HELPERS ============ */
@@ -1308,7 +1354,7 @@ function repSparklineHtml(key){
   const all=DB.allDays();
   const bars=[];
   for(let i=6;i>=0;i--){
-    const dd=new Date(CURRENT_DATE); dd.setDate(dd.getDate()-i);
+    const dd=new Date(EDIT_DATE); dd.setDate(dd.getDate()-i);
     const ds=dd.toISOString().slice(0,10);
     const val=i===0?(day.health[key]||0):(all[ds]&&all[ds].health?(all[ds].health[key]||0):0);
     bars.push(val);
@@ -1463,7 +1509,7 @@ function renderHealth(){
   const allSleepDays=DB.allDays();
   const sleepVals=[];
   for(let i=6;i>=0;i--){
-    const dd=new Date(CURRENT_DATE);dd.setDate(dd.getDate()-i);
+    const dd=new Date(EDIT_DATE);dd.setDate(dd.getDate()-i);
     const ds=dd.toISOString().slice(0,10);
     let v=null;
     if(i===0){v=h.sleepHours||null;}
@@ -1472,7 +1518,7 @@ function renderHealth(){
   }
   const slChart=sleepZoneChartSvg(sleepVals,7,9);
   if(slChart){
-    const slLbls=[];for(let i=6;i>=0;i--){const dd=new Date(CURRENT_DATE);dd.setDate(dd.getDate()-i);slLbls.push('<span>'+dd.toLocaleDateString('en-US',{weekday:'short'}).charAt(0)+'</span>');}
+    const slLbls=[];for(let i=6;i>=0;i--){const dd=new Date(EDIT_DATE);dd.setDate(dd.getDate()-i);slLbls.push('<span>'+dd.toLocaleDateString('en-US',{weekday:'short'}).charAt(0)+'</span>');}
     html+=sectionLabel('SLEEP TREND — LAST 7 DAYS','var(--health)');
     html+='<div class="card">'+slChart+'<div class="trend-labels">'+slLbls.join('')+'</div></div>';
   }
@@ -1506,11 +1552,13 @@ function renderHealth(){
   const plankDisp=plankLive>0?formatSeconds(plankLive):plankSecs>0?formatSeconds(plankSecs):'--';
   html += '<div class="checkline"><span style="flex:1">Plank</span>';
   html += '<span id="plank-time" style="font-family:var(--mono);font-size:11px;color:var(--health);margin-right:8px">'+plankDisp+'</span>';
-  if(plankTimer.running){
-    html += '<button id="plank-stop" style="font-family:var(--mono);font-size:9px;padding:2px 8px;border-radius:4px;border:1px solid var(--red);background:rgba(224,104,104,.1);color:var(--red);cursor:pointer">STOP</button>';
-  } else {
-    html += '<button id="plank-start" style="font-family:var(--mono);font-size:9px;padding:2px 8px;border-radius:4px;border:1px solid var(--health);background:rgba(224,138,84,.1);color:var(--health);cursor:pointer">START</button>';
-    if(plankSecs>0) html += '<button id="plank-reset" style="font-family:var(--mono);font-size:9px;padding:2px 7px;border-radius:4px;border:1px solid var(--border);background:transparent;color:var(--mute);cursor:pointer;margin-left:4px">REDO</button>';
+  if(EDIT_DATE === TODAY){
+    if(plankTimer.running){
+      html += '<button id="plank-stop" style="font-family:var(--mono);font-size:9px;padding:2px 8px;border-radius:4px;border:1px solid var(--red);background:rgba(224,104,104,.1);color:var(--red);cursor:pointer">STOP</button>';
+    } else {
+      html += '<button id="plank-start" style="font-family:var(--mono);font-size:9px;padding:2px 8px;border-radius:4px;border:1px solid var(--health);background:rgba(224,138,84,.1);color:var(--health);cursor:pointer">START</button>';
+      if(plankSecs>0) html += '<button id="plank-reset" style="font-family:var(--mono);font-size:9px;padding:2px 7px;border-radius:4px;border:1px solid var(--border);background:transparent;color:var(--mute);cursor:pointer;margin-left:4px">REDO</button>';
+    }
   }
   html += '</div></div>';
 
@@ -1525,14 +1573,14 @@ function renderHealth(){
   html += sectionLabel('NOTES', 'var(--health)');
   html += '<div class="card">'+'<textarea class="input textarea" id="health-notes" placeholder="Notes for today">'+(h.notes||'')+'</textarea></div>';
   html += sectionLabel('MONTH TO DATE');
-  const avg = monthAvg(healthScore, CURRENT_DATE.slice(0,7));
+  const avg = monthAvg(healthScore, EDIT_DATE.slice(0,7));
   html += '<div class="card">'+progressRow('Health consistency', avg, avg+'%', 'var(--health)')+'</div>';
 
   const healthPrevAvg = monthAvg(healthScore, prevMonthPrefix());
   html += sectionLabel('THIS MONTH VS LAST MONTH','var(--health)');
   html += '<div class="card">'+momCompareHtml(avg, healthPrevAvg, 'var(--health)')+'</div>';
 
-  html += '<button class="save-btn" id="save-health">Save today</button>';
+  html += '<button class="save-btn" id="save-health">'+saveBtnLabel()+'</button>';
   s.innerHTML = html;
   wireCmpArrows(s, 'health', renderHealth);
 
@@ -1593,6 +1641,7 @@ function renderHealth(){
     if(notesEl) h.notes=notesEl.value;
     saveDayNow();
   });
+  patchAriaRoles(s);
 }
 function yesNoRow(key, label, val){
   const isYes=val===true, isNo=val===false;
@@ -1675,7 +1724,7 @@ function openTxModal(){
       const amount = parseFloat(document.getElementById('tx-amt').value);
       if(isNaN(amount) || amount<=0) return;
       const list = DB.transactions();
-      list.push({date:todayStr(), type:type, amount:amount, category: type==='expense'?category:''});
+      list.push({date:EDIT_DATE, type:type, amount:amount, category: type==='expense'?category:''});
       DB.saveTransactions(list);
       day.finance.logged = true;
       closeModal();
@@ -1724,22 +1773,22 @@ function renderMusic(){
   html += sectionLabel('NOTES', 'var(--music)');
   html += '<div class="card">'+'<textarea class="input textarea" id="music-notes" placeholder="Notes for today">'+(day.music.notes||'')+'</textarea></div>';
   html += sectionLabel('MONTH TO DATE');
-  const avg = monthAvg(musicScore, CURRENT_DATE.slice(0,7));
+  const avg = monthAvg(musicScore, EDIT_DATE.slice(0,7));
   const allDaysMusic = DB.allDays();
-  const monthPrefixMusic = CURRENT_DATE.slice(0,7);
+  const monthPrefixMusic = EDIT_DATE.slice(0,7);
   const instruCount = Object.keys(allDaysMusic).filter(k=>k.startsWith(monthPrefixMusic) && allDaysMusic[k].music && allDaysMusic[k].music.workedOn==='instrumentals').length;
   html += '<div class="card">'+progressRow('Session logging rate', avg, avg+'%', 'var(--music)')+
     '<div style="display:flex;justify-content:space-between;padding-top:4px;font-size:11px;"><span>Instrumentals sessions</span><span style="font-family:var(--mono);color:var(--music)">'+instruCount+' this month</span></div></div>';
 
-  const wVals=[]; for(let i=6;i>=0;i--){ const dd=new Date(CURRENT_DATE); dd.setDate(dd.getDate()-i); const ds=dd.toISOString().slice(0,10); let m=null; if(i===0){const v=day.music.sessionMinutes||0;if(v>0)m=v;}else if(allDaysMusic[ds]&&allDaysMusic[ds].music){const v=allDaysMusic[ds].music.sessionMinutes||0;if(v>0)m=v;} wVals.push(m); }
+  const wVals=[]; for(let i=6;i>=0;i--){ const dd=new Date(EDIT_DATE); dd.setDate(dd.getDate()-i); const ds=dd.toISOString().slice(0,10); let m=null; if(i===0){const v=day.music.sessionMinutes||0;if(v>0)m=v;}else if(allDaysMusic[ds]&&allDaysMusic[ds].music){const v=allDaysMusic[ds].music.sessionMinutes||0;if(v>0)m=v;} wVals.push(m); }
   const wChart=waveChartSvg(wVals,'var(--music)','var(--red)');
-  if(wChart){ const wLbls=[]; for(let i=6;i>=0;i--){const dd=new Date(CURRENT_DATE);dd.setDate(dd.getDate()-i);wLbls.push('<span>'+dd.toLocaleDateString('en-US',{weekday:'short'}).charAt(0)+'</span>');} html+=sectionLabel('STUDIO MINUTES — LAST 7 DAYS','var(--music)')+'<div class="card">'+wChart+'<div class="trend-labels">'+wLbls.join('')+'</div></div>'; }
+  if(wChart){ const wLbls=[]; for(let i=6;i>=0;i--){const dd=new Date(EDIT_DATE);dd.setDate(dd.getDate()-i);wLbls.push('<span>'+dd.toLocaleDateString('en-US',{weekday:'short'}).charAt(0)+'</span>');} html+=sectionLabel('STUDIO MINUTES — LAST 7 DAYS','var(--music)')+'<div class="card">'+wChart+'<div class="trend-labels">'+wLbls.join('')+'</div></div>'; }
 
   const musicPrevAvg = monthAvg(musicScore, prevMonthPrefix());
   html += sectionLabel('THIS MONTH VS LAST MONTH','var(--music)');
   html += '<div class="card">'+momCompareHtml(avg, musicPrevAvg, 'var(--music)')+'</div>';
 
-  html += '<button class="save-btn" id="save-music">Save today</button>';
+  html += '<button class="save-btn" id="save-music">'+saveBtnLabel()+'</button>';
   s.innerHTML = html;
   wireCmpArrows(s, 'music', renderMusic);
 
@@ -1774,6 +1823,7 @@ function renderMusic(){
     }
     saveDayNow();
   });
+  patchAriaRoles(s);
 }
 
 /* ============ FINANCE ============ */
@@ -1781,7 +1831,7 @@ function renderFinance(){
   const s = document.getElementById('s-finance');
   const goals = DB.goals();
   const txs = DB.transactions();
-  const monthPrefix = CURRENT_DATE.slice(0,7);
+  const monthPrefix = EDIT_DATE.slice(0,7);
   const monthTx = txs.filter(t=>t.date.startsWith(monthPrefix));
   const deposited = monthTx.filter(t=>t.type==='deposit').reduce((a,b)=>a+b.amount,0);
   const withdrawn = monthTx.filter(t=>t.type==='withdraw').reduce((a,b)=>a+b.amount,0);
@@ -1830,7 +1880,7 @@ function renderFinance(){
   html += sectionLabel('THIS MONTH VS LAST MONTH','var(--finance)');
   html += '<div class="card">'+momCompareHtml(avg, financePrevAvg, 'var(--finance)')+'</div>';
 
-  html += '<button class="save-btn" id="save-finance">Save today</button>';
+  html += '<button class="save-btn" id="save-finance">'+saveBtnLabel()+'</button>';
   s.innerHTML = html;
   wireCmpArrows(s, 'finance', renderFinance);
 
@@ -1844,6 +1894,7 @@ function renderFinance(){
     DB.saveGoals(g);
     saveDayNow();
   });
+  patchAriaRoles(s);
 }
 
 /* ============ GROWTH ============ */
@@ -1865,14 +1916,14 @@ function renderGrowth(){
   html += sectionLabel('NOTES', 'var(--growth)');
   html += '<div class="card">'+'<textarea class="input textarea" id="growth-notes" placeholder="Notes for today">'+(g.notes||'')+'</textarea></div>';
   html += sectionLabel('MONTH TO DATE');
-  const avg = monthAvg(growthScore, CURRENT_DATE.slice(0,7));
+  const avg = monthAvg(growthScore, EDIT_DATE.slice(0,7));
   html += '<div class="card">'+progressRow('Growth consistency', avg, avg+'%', 'var(--growth)')+'</div>';
 
   const growthPrevAvg = monthAvg(growthScore, prevMonthPrefix());
   html += sectionLabel('THIS MONTH VS LAST MONTH','var(--growth)');
   html += '<div class="card">'+momCompareHtml(avg, growthPrevAvg, 'var(--growth)')+'</div>';
 
-  html += '<button class="save-btn" id="save-growth">Save today</button>';
+  html += '<button class="save-btn" id="save-growth">'+saveBtnLabel()+'</button>';
   s.innerHTML = html;
   wireCmpArrows(s, 'growth', renderGrowth);
 
@@ -1884,6 +1935,7 @@ function renderGrowth(){
     if(notesEl) g.notes=notesEl.value;
     saveDayNow();
   });
+  patchAriaRoles(s);
 }
 
 /* ============ REVIEW ============ */
@@ -1892,7 +1944,7 @@ function renderReview(){
   const all = DB.allDays();
 
   function getWeekDays(offset){
-    const d = new Date(CURRENT_DATE);
+    const d = new Date(EDIT_DATE);
     const daysSinceMon = (d.getDay()+6)%7;
     d.setDate(d.getDate()-daysSinceMon-offset*7);
     const days = [];
@@ -2154,6 +2206,7 @@ function renderReview(){
   const revFwd = document.getElementById('rev-fwd');
   if(revBack) revBack.addEventListener('click',()=>{ reviewWeekOffset++; renderReview(); });
   if(revFwd) revFwd.addEventListener('click',()=>{ if(reviewWeekOffset>0){ reviewWeekOffset--; renderReview(); } });
+  patchAriaRoles(s);
 }
 
 /* ============ TOAST ============ */
@@ -2163,6 +2216,149 @@ function showToast(msg){
   t.style.cssText='position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:var(--card-bg);backdrop-filter:blur(16px);border:1px solid var(--card-border);color:var(--text);padding:10px 16px;border-radius:20px;font-size:12px;font-family:var(--sans);z-index:10000;white-space:nowrap;box-shadow:var(--card-shadow)';
   document.body.appendChild(t);
   setTimeout(()=>t.remove(),2500);
+}
+
+/* ============ NEGLECT CHECK ============ */
+function computeNeglectGaps(){
+  const all=DB.allDays();
+  function gapDays(checkFn){
+    if(checkFn(day)) return 0;
+    for(let i=1;i<=60;i++){
+      const d=new Date(TODAY); d.setDate(d.getDate()-i);
+      const ds=d.toISOString().slice(0,10);
+      const rec=all[ds];
+      if(rec&&checkFn(rec)) return i;
+    }
+    return 999;
+  }
+  const H=r=>(r.health||{}),F=r=>(r.faith||{}),G=r=>(r.growth||{});
+  const GL={frame:'Frame with women',eyecontact:'Eye contact',posture:'Posture check',metacognition:'Metacognition',impulse:'Impulse control',delayedgrat:'Delayed gratification',nameemotion:'Naming emotion first',spokeup:'Spoke up',initiated:'Initiated',fear:'Acted despite fear',words:'Economy of words',listening:'Active listening',rehearsal:'Mental rehearsal',strictself:'Strict with myself',strictothers:'Strict with others'};
+  const tiers=[
+    {threshold:1,items:[
+      {key:'water',label:'Water',fn:r=>H(r).water>0},
+      {key:'smokeFree',label:'Smoke-free',fn:r=>!!H(r).smokeFree},
+      {key:'fruits',label:'Fruits',fn:r=>!!H(r).fruits},
+      {key:'milk',label:'Milk',fn:r=>!!H(r).milk},
+      {key:'brushing',label:'Brushing',fn:r=>H(r).brushing>0},
+      {key:'dhikr',label:'Dhikr',tab:'faith',fn:r=>!!F(r).dhikr},
+      {key:'gratitude',label:'Gratitude',tab:'faith',fn:r=>!!F(r).gratitude},
+      ...GROWTH_ITEMS.map(k=>({key:'g_'+k,label:GL[k],tab:'growth',fn:r=>G(r)[k]===true}))
+    ]},
+    {threshold:2,items:[
+      {key:'pushupsReps',label:'Push-ups',fn:r=>H(r).pushupsReps>0},
+      {key:'abrollerReps',label:'Ab roller',fn:r=>H(r).abrollerReps>0},
+      {key:'kegelReps',label:'Kegel',fn:r=>H(r).kegelReps>0},
+      {key:'matroutineReps',label:'Mat routine',fn:r=>H(r).matroutineReps>0},
+      {key:'plankSeconds',label:'Plank',fn:r=>H(r).plankSeconds>0}
+    ]},
+    {threshold:4,items:[
+      {key:'tennisMinutes',label:'Tennis',fn:r=>H(r).tennisMinutes>0},
+      {key:'runningKm',label:'Running',fn:r=>H(r).runningKm>0},
+      {key:'sessionLogged',label:'Music session',tab:'music',fn:r=>(r.music||{}).sessionLogged===true},
+      {key:'tahajjud',label:'Tahajjud',tab:'faith',fn:r=>!!F(r).tahajjud},
+      {key:'fasting',label:'Fasting',tab:'faith',fn:r=>!!F(r).fasting},
+      {key:'knifesharpening',label:'Knife sharpening',fn:r=>!!H(r).knifesharpening},
+      {key:'penilemassage',label:'Penile massage',fn:r=>!!H(r).penilemassage},
+      {key:'stopstart',label:'Stop-start',fn:r=>!!H(r).stopstart}
+    ]}
+  ];
+  const gaps=[];
+  for(const tier of tiers){
+    for(const item of tier.items){
+      const g=gapDays(item.fn);
+      if(g>=tier.threshold) gaps.push({...item,gap:g,threshold:tier.threshold});
+    }
+  }
+  const pt=calcPrayerTimes(TODAY);
+  const base=new Date(TODAY+'T00:00:00Z').getTime();
+  const now=Date.now();
+  const pNames={fajr:'Fajr',dhuhr:'Dhuhr',asr:'Asr',maghrib:'Maghrib',isha:'Isha'};
+  const pUTC={fajr:'fajrUTC',dhuhr:'dhuhrUTC',asr:'asrUTC',maghrib:'maghribUTC',isha:'ishaUTC'};
+  for(const [pk,pl] of Object.entries(pNames)){
+    if(base+pt[pUTC[pk]]*3600000<now && day.faith[pk]===undefined){
+      gaps.push({key:'prayer_'+pk,label:pl+' — not logged today',tab:'faith',prayerKey:pk,gap:1,threshold:0});
+    }
+  }
+  gaps.sort((a,b)=>(b.gap-b.threshold)-(a.gap-a.threshold));
+  return gaps;
+}
+
+function neglectBannerHtml(gaps){
+  if(!gaps.length||neglectDismissed) return '';
+  const top3=gaps.slice(0,3);
+  const gapLabel=g=>g===999?'Never logged':g===1?'Not today':g+' days ago';
+  const tabOf=item=>item.tab||(item.key.startsWith('g_')?'growth':'health');
+  const rows=top3.map(g=>'<div class="checkline" data-neglect-tab="'+tabOf(g)+'" style="cursor:pointer">'+
+    '<span style="flex:1;font-size:12px">'+g.label+'</span>'+
+    '<span style="font-family:var(--mono);font-size:10px;color:var(--red)">'+gapLabel(g.gap)+'</span>'+
+    '</div>').join('');
+  const more=gaps.length>3?'<div style="font-size:10px;color:var(--mute);text-align:center;margin-top:6px">+'+(gaps.length-3)+' more</div>':'';
+  return '<div class="card" style="border-color:var(--red)">'+
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">'+
+    '<span style="font-family:var(--mono);font-size:9px;color:var(--red);letter-spacing:1px">NEGLECT CHECK</span>'+
+    '<button id="neglect-dismiss" style="background:transparent;border:none;color:var(--mute);cursor:pointer;font-size:18px;padding:0;line-height:1">&#215;</button>'+
+    '</div>'+rows+more+'</div>';
+}
+
+function renderNotifToggle(){
+  const el=document.getElementById('home-notif-toggle');
+  if(!el) return;
+  if(!('Notification' in window)){el.innerHTML='';return;}
+  const enabled=localStorage.getItem('lo_notif_enabled')==='true';
+  el.innerHTML='<button style="background:transparent;border:none;color:var(--mute);font-size:10px;cursor:pointer;opacity:.7;letter-spacing:.3px;font-family:var(--sans)" onclick="'+(enabled?'disableNotifications()':'enableNotifications()')+'">'+
+    (enabled?'Disable neglect notifications':'Enable neglect notifications')+'</button>';
+}
+
+async function enableNotifications(){
+  if(!('Notification' in window)){showToast('Notifications not supported');return;}
+  const perm=await Notification.requestPermission();
+  if(perm==='granted'){
+    localStorage.setItem('lo_notif_enabled','true');
+    showToast('Neglect notifications enabled');
+    renderNotifToggle();
+  } else {
+    showToast('Notification permission denied');
+  }
+}
+
+function disableNotifications(){
+  localStorage.removeItem('lo_notif_enabled');
+  showToast('Neglect notifications disabled');
+  renderNotifToggle();
+}
+
+async function checkAndNotify(gaps){
+  if(!('Notification' in window)||Notification.permission!=='granted') return;
+  if(localStorage.getItem('lo_notif_enabled')!=='true') return;
+  if(!gaps.length) return;
+  const tieredGaps=gaps.filter(g=>!g.prayerKey);
+  const prayerGaps=gaps.filter(g=>!!g.prayerKey);
+  async function fireNotif(title,body,tag){
+    try{
+      const reg=await navigator.serviceWorker.ready;
+      reg.showNotification(title,{body,icon:'icon-192.png',tag,renotify:false});
+    }catch(e){
+      try{new Notification(title,{body});}catch(_){}
+    }
+  }
+  if(tieredGaps.length){
+    const lastSeen=localStorage.getItem('lo_lastNudgeSeen');
+    if(lastSeen!==TODAY){
+      localStorage.setItem('lo_lastNudgeSeen',TODAY);
+      const top=tieredGaps[0];
+      const body=tieredGaps.length===1
+        ? top.label+' hasn\'t been logged recently.'
+        : top.label+' and '+(tieredGaps.length-1)+' other item'+(tieredGaps.length>2?'s':'')+' need attention.';
+      await fireNotif('Life OS — Neglect Check',body,'lo-neglect');
+    }
+  }
+  for(const p of prayerGaps){
+    const gate='lo_lastPrayerNudge_'+p.prayerKey+'_'+TODAY;
+    if(!localStorage.getItem(gate)){
+      localStorage.setItem(gate,'1');
+      await fireNotif('Life OS — Prayer',p.label,'lo-prayer-'+p.prayerKey);
+    }
+  }
 }
 
 /* ============ FACE ID LOCK ============ */
@@ -2261,13 +2457,69 @@ async function unlockWithFaceId(){
   }
 }
 
+/* ============ SCROLL REVEAL ============ */
+function animateCardsIn(screenEl){
+  const cards=Array.from(screenEl.querySelectorAll(':scope > .card,:scope > .card-shell,:scope > .cat-scroll'));
+  cards.forEach(c=>{c.classList.remove('visible');c.classList.add('card-animate');});
+  const observer=new IntersectionObserver(entries=>{
+    entries.forEach(entry=>{
+      if(entry.isIntersecting){
+        const idx=cards.indexOf(entry.target);
+        setTimeout(()=>entry.target.classList.add('visible'),idx*40);
+        observer.unobserve(entry.target);
+      }
+    });
+  },{root:screenEl,threshold:0.05});
+  cards.forEach(c=>observer.observe(c));
+}
+
+/* ============ ARIA / KEYBOARD ============ */
+function patchAriaRoles(container){
+  (container||document).querySelectorAll('.pill,.checkline,.cd,.cal-bubble-cell').forEach(el=>{
+    if(el.getAttribute('role')==='button') return;
+    el.setAttribute('role','button');
+    el.setAttribute('tabindex','0');
+  });
+}
+document.addEventListener('keydown',e=>{
+  if((e.key==='Enter'||e.key===' ')&&e.target.getAttribute('role')==='button'){
+    e.preventDefault();
+    e.target.click();
+  }
+});
+
+/* ============ EDIT MODE ============ */
+function enterEditMode(dateStr){
+  EDIT_DATE = dateStr;
+  day = DB.day(EDIT_DATE);
+  closeModal();
+  renderAll();
+}
+function exitEditMode(){
+  EDIT_DATE = TODAY;
+  day = DB.day(TODAY);
+  renderAll();
+}
+function renderEditBanner(){
+  const banner = document.getElementById('edit-banner');
+  if(EDIT_DATE !== TODAY){
+    const d = new Date(EDIT_DATE+'T00:00:00');
+    document.getElementById('edit-banner-label').textContent = 'EDITING — '+d.toDateString().toUpperCase();
+    banner.classList.remove('hidden');
+  } else {
+    banner.classList.add('hidden');
+  }
+}
+
 /* ============ NAV AND INIT ============ */
-function renderAll(){ renderHome(); renderFaith(); renderHealth(); renderMusic(); renderFinance(); renderGrowth(); renderReview(); }
+function renderAll(){ renderHome(); renderFaith(); renderHealth(); renderMusic(); renderFinance(); renderGrowth(); renderReview(); renderEditBanner(); }
 
 function goTab(tab){
   document.querySelectorAll('.screen').forEach(sc=>sc.classList.remove('active'));
   document.querySelectorAll('.nb').forEach(b=>b.style.color='var(--mute)');
-  document.getElementById('s-'+tab).classList.add('active');
+  const screenEl=document.getElementById('s-'+tab);
+  animateCardsIn(screenEl);
+  screenEl.classList.add('active');
   const btn = document.querySelector('.nb[data-tab="'+tab+'"]');
   if(btn) btn.style.color = getComputedStyle(document.documentElement).getPropertyValue('--'+tab);
 }
@@ -2289,9 +2541,11 @@ if('serviceWorker' in navigator){
 initTheme();
 function doInit(){
   renderAll();
+  animateCardsIn(document.getElementById('s-home'));
   renderFaithCountdown();
   if(swalatInterval) clearInterval(swalatInterval);
   swalatInterval = setInterval(renderFaithCountdown, 1000);
+  checkAndNotify(computeNeglectGaps());
 }
 checkFaceIdLock(doInit);
 </script>
