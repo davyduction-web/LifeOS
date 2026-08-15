@@ -923,6 +923,57 @@ for what's actually true today)
 
 ---
 
+## SESSION LOG — 2026-08-15 (design skills pass + past-day editing + Finance overhaul)
+
+**Design skills audit.** Inventoried everything installed under `Skills\`: impeccable, emil-design-eng, high-end-visual-design, apple-design, design-taste-frontend/v1, playwright-mcp, 21st.dev MCP, plus ~16 unread skills. Actually used: impeccable (critique/audit), emil-design-eng (press-state reference), high-end-visual-design (double-bezel, magnetic-icon vocabulary), playwright-mcp (screenshot verification throughout this whole session). Evaluated and set aside: apple-design (wheel picker already fine on-device, desktop-only jank not worth the rewrite risk), design-taste-frontend (excludes dashboards by its own stated scope), 21st.dev (React-only, no fit for a vanilla single-file app).
+
+**Track A — correctness & accessibility (impeccable-driven).** Press-state standardized to `scale(0.96)`/`.12s` everywhere, including a real bug fix (`.btn-primary`/`.btn-cancel` were missing from the transition selector entirely, not just the `:active` rule). `--mute` contrast fixed (4.09:1→4.92:1 dark, 2.65:1→5.78:1 light, verified via real luminance math, not the audit's estimate). Touch targets expanded to 44px via invisible `::before` hit-areas — visual size unchanged. ARIA roles + keyboard activation added to `.pill`/`.checkline`/`.cd`/`.cal-bubble-cell`. Meta tag + favicon fixed. `backdrop-filter` reduced 16px→4px on scrolling cards — verified zero visual regression against the OLED-black background (nothing to blur).
+
+**Track B — visual enhancement.** Double-bezel card-shell on Home hero + Code Score cards. Magnetic FAB icon hover (spring cubic-bezier). Scroll-entry fade-up-blur reveal via IntersectionObserver, `prefers-reduced-motion` respected (though not device-tested with the OS setting actually toggled).
+
+**Header logo.** `image_holographic_logo-825a1b.png` placed true-center in the header row via `position:absolute; left:50%; transform:translateX(-50%)`, all 7 tabs confirmed. Required an `sw.js` cache bump (`lifeos-v1`→`lifeos-v2`) since the change didn't reach the phone until the stale cache was evicted — worth remembering for any future asset change.
+
+**Past-day editing — the big structural change.** Root cause diagnosed first: `CURRENT_DATE` conflated two roles ("what day am I editing" vs "what is today in the real world") across 20+ read sites. Fixed by introducing `TODAY` (frozen at load) alongside a renamed `EDIT_DATE` (mutable). Entry via "Edit this day" button in `openDayDetail()` — required a follow-up fix since it was initially only wired into the populated-record branch, not the empty-record one (the most common real case). Persistent "Editing [date] — Back to Today" banner across all tabs. Home is permanently re-anchored to real `TODAY` (score, streaks, trend, calendar, `computeStreak()`) regardless of edit mode — this was the one place a wrong wire-up would've been easy to miss. Dependent fixes: dynamic Save button label, plank timer disabled in edit mode, compare-card date label, Music/Finance retroactive dating (follows `EDIT_DATE`, confirmed decision — a transaction logged while editing a past day dates to that day, not real today). Verified fully end-to-end via Playwright: edited a past day, logged a transaction, confirmed the literal date string in storage, confirmed isolation from today's data.
+
+**Home score visualization — reworked twice.** First pass: removed the wireframe glow cube, kept the isometric bar chart ("Category Balance Today") as explicitly requested, added a flat 5-slice donut + ranked list. User feedback: the flat donut read as a near-duplicate of the Code Score ring. Second pass, after reference images: rebuilt as a 3D-tilted pie (CSS `conic-gradient` + `perspective`/`rotateX`, deliberately NOT a real 3D library — Three.js was evaluated and ruled out given the app has zero dependencies today and the added weight/complexity wasn't justified) with a darkened wall layer for depth, gloss highlight, and thin divider lines between slices. Floating leader-line labels replace the ranked list — omitted for zero-score categories so the pie doesn't clutter with empty labels; percentage-only text (not category name) to prevent viewBox overflow on longer names. Total score relocated off the pie's face to a dedicated stat line below (was overlapping the colored surface). Caught and fixed a real gradient-stop bug along the way (3 of 5 categories were silently getting zero-width slices in an early version).
+
+**Finance — transaction list + edit/delete.** Stable `id` system via `nextTxId()` + `backfillTransactionIds()` (idempotent, collision-safe counter, not timestamp-based). "Recent Transactions" list added (20 most recent, all dates, newest-first) between Spending Breakdown and Notes. Tap-to-edit/delete via a pre-filled modal, `id`-based removal (not index-based, so no shift corruption on delete). Verified against real pre-existing data, not just synthetic test data.
+
+**Finance — Report view.** Entry via a "Report →" button, full-replace view with Back. Category pie (adapted from the Home pie pattern, percentage + amount on two label lines) + "Top Spending Categories" ranked list + "Biggest Individual Expenses". Period selector: two rows of three pills — Today / This Week / Last 3 Weeks, and This Month / Last 3 Months / All Time (Monday-start week convention, matching the existing `getWeekDays()` in Review, not a new invention). Main Finance tab's always-visible Spending Breakdown switched from monthly to Today-only, so logging a transaction is immediately visible rather than buried in a month aggregate — full monthly view still lives in the Report.
+
+**Finance — Other-category descriptions.** Other transactions can carry a required free-text note, shown in place of "Other" in Recent Transactions, Day Detail, and the Report's Biggest Individual Expenses. Deliberately kept GROUPED at every aggregate level (pie/ranked-list/breakdown/Review tab all still treat Other as one bucket) — this reverses an initial "separate entry per description" plan, dropped once it became clear that approach had no ceiling on pie slice count over time (every uniquely-worded Other entry ever logged would become a permanent slice in "All Time" view).
+
+**Still open / deferred:**
+- Health "24-hour day" donut (sleep/work/etc. in hours) — not started. Needs a real decision: most of a day isn't currently tracked in hours (only sleep is derivable from existing bedtime/waketime), so this would mean committing to a new daily logging habit, not just a new chart on old data.
+- Whether Faith/Health/Music/Growth get a Report view like Finance's — under active discussion, not yet scoped.
+- Track B further polish (button-in-button trailing icons beyond the FAB) — evaluated via mockup, not pursued further.
+
+---
+
+## SESSION LOG — 2026-08-15, continued (Faith Report, Faith performance fix, Health Report, Time Budget pie)
+
+**Faith Report — shipped.** Same entry/period-selector scaffolding as Finance's Report (Today/This Week/Last 3 Weeks/This Month/Last 3 Months/All Time, Monday-start weeks). Deliberately did NOT reuse the pie chart pattern here — reasoned explicitly that Faith's data (3-state per fixed prayer) answers a different question than Finance's (proportional share across categories), so a pie would misrepresent it. Built instead: a stacked horizontal bar per prayer (green=caught/amber=delayed/red=missed/gray=unlogged), making the weakest prayer visually obvious by comparing green-segment widths at a glance. Extra Practice shown as simple day-counts. Streaks section: current + best-ever for all 9 items (5 prayers + Tahajjud/Fasting/Dhikr/Gratitude) via a new `computeFaithBests()` helper, extending the existing single-item pattern already used for the Fajr streak on Home. Verified against real (sparse, 2-day) data — confirmed the thin/empty state reads as "not enough data yet" rather than broken.
+
+**Faith tab performance fix — real bug, root-caused before fixing.** User reported the Faith tab "cracks"/stutters when tapping prayer states, unlike other tabs. Investigation found two separate causes, not one: (1) `swalatInterval` fired `renderFaithCountdown()` every second unconditionally, doing a full `innerHTML` rebuild of a `backdrop-filter:blur(4px)` card — forcing a GPU recomposite every tick, active on every tab, worst when it landed near a Faith re-render. Fixed with a `textContent`-only fast path for the digits (no more full rebuild) plus a tab-visibility guard (interval body no-ops when Faith isn't the active screen). (2) A separate, unrelated bug: Extra Practice pills had two overlapping event listeners (`.pill` catch-all and `[data-yn-key]`) both firing on a single tap — doubling the render cost. Deduplicated to one listener. Verified via rapid-tap timing tests (0–1ms per tap on desktop) — explicitly flagged that desktop timing can't prove the felt mobile GPU improvement, real confirmation still needs an on-device check.
+
+**Health Report — shipped, no donut for the main breakdown (deliberately).** Investigated first: Health's fields span incompatible units (booleans, 0–5 counts, rep numbers, seconds, km, minutes) — explicitly reasoned that forcing them into one pie would misrepresent the data the same way Faith's would have, since there's no honest common "whole" to divide. Built as 4 sections instead:
+- **Habit Consistency** — stacked bars (Faith's pattern reused) for the 6 "good" booleans (fruits/milk/stopstart/smokeFree/knifesharpening/penilemassage) plus Water and Brushing folded in as threshold booleans (met-target = counts as done; thresholds pulled directly from `healthScore()`'s own partial-credit ceiling — water≥5, brushing≥2 — confirmed matching existing scoring logic, not invented). The 3 "bad" booleans (junk/weed/nailbiting) deliberately NOT shown as bars — an inverted-color bar ("green means you did the bad thing zero times") was judged too easy to misread at a glance; shown instead as plain text stats under an "Avoidances" sub-header ("Junk-free days: N/M").
+- **Sleep** — see Time Budget below; this absorbed and superseded what was originally going to be a standalone sleep-only donut.
+- **Stamina Records** — period-best vs all-time-best table for the 4 rep items, reusing `computeAllTimeBests()`.
+- **Streaks** — current + best-ever, smoke-free plus all 4 rep items (any reps>0 on a day = streak day), via a new `computeHealthBests()` following the exact same run/max pattern as `computeFaithBests()`.
+
+**Water bug — found and fixed.** The Habit Consistency bar for Water showed 0/N even after logging. Root cause: the bar's "met" check used a stale `>=5` threshold comparison that didn't match how the field is actually populated day-to-day; changed to `>0` ("Water (any)" — logged at all counts as a consistency day, distinct from the separate full-credit≥5 threshold used elsewhere in scoring). Verified against real logged data after the fix.
+
+**The sleep donut saga — four iterations, worth recording honestly because of what it revealed.** This took far more back-and-forth than any other chart this session:
+1. First build: a flat CSS glow-ring (not the tilted-pie family) — rejected on sight, didn't match Home/Finance's established pie language at all.
+2. Rebuilt as a proper tilted 3D pie (2-segment: slept vs. remaining, with a dashed target-marker line) — rejected again: rendered visibly smaller/flatter than Home's pie despite "identical" CSS values. Root cause found: the multi-slice pies reserve ~65px of margin per side in their viewBox for floating labels; the 2-segment version had no labels, so removing that reserved space (to fix the size complaint) also silently removed the label capability — a real lesson that "the numbers match" isn't the same claim as "it looks the same," and a fix that solves one complaint can reintroduce a different one if the two aren't checked together.
+3. Rebuilt again with Finance-style two-line labels restored — still rejected: it was copying the wrong reference (Finance Report's 2-line %/amount labels) when the user was actually pointing at Home's simpler single-line "Name + Number" style. Two visually similar but different label conventions exist in the app now, and prompts need to specify which one explicitly rather than assuming "the pie style" is singular.
+4. Final pivot, and the one that actually landed: rather than keep patching a 2-segment sleep-only ring, expanded the whole concept into a genuine multi-slice **Time Budget** pie — Sleep + Tennis + Running + Hiking + Walking + Unaccounted, all converted to a common unit (minutes), reusing the exact proven multi-slice pie function (same one Home and Finance use) instead of a bespoke 2-segment implementation. This required adding 3 new fields (`runningMinutes` alongside the existing `runningKm` — kept both, decided explicitly rather than replacing km; `hikingMinutes` and `walkingMinutes` as brand-new Movement-section fields, no prior tracking existed for either). Sleep's target comparison, no longer a viable marker-line on a 6-segment pie, moved to a plain text stat below ("Sleep: 22h this period · target 105–135h · 84h short"). Verified with an actual arithmetic check, not just a visual one: 22h sleep + 2h30m tennis + 1h03m running + 1h45m hiking + 1h35m walking + 115h unaccounted = 144h = exactly 6 days × 24h. The day-by-day Sleep Trend bar chart (`sleepZoneChartSvg`) was kept unchanged alongside the new pie — answers a different question (which specific nights were short) that the aggregate pie doesn't.
+
+**Deployment reminder given (not yet executed as of this log):** user was about to push tonight's changes to GitHub Pages and asked whether the phone's existing installed app needs reinstalling. Answer given: no — it's the same `index.html` file the whole session, GitHub Pages just re-serves it once pushed; the phone needs a full close-and-reopen (not just backgrounding) for `sw.js` to evict its cache and fetch the new version, sometimes needs two reopen cycles. Same pattern as the header-logo cache issue earlier this session.
+
+---
+
 ## LIVE URL
 
 **https://davyduction-web.github.io/LifeOS** — confirmed working by
@@ -939,13 +990,19 @@ for Add to Home Screen and any future sharing/testing.
    app/site next time he has Life OS open near a prayer time, and report
    back if anything is off by more than a couple minutes.
 
-Everything else from every design conversation, every locked decision,
-and every feature request across the whole project history is built and
-confirmed. No queued work.
+2. **Health "24-hour day" donut** — done. Shipped as the Health Report's "Time Budget" pie (Sleep + Tennis + Running + Hiking + Walking + Unaccounted), see 2026-08-15 continued session log.
+
+3. **Report views for Faith/Health/Music/Growth** — Finance, Faith, and Health all have one now. Music and Growth are still undecided — not yet discussed.
+
+4. **Tonight's changes (Faith Report, Faith perf fix, Health Report, Time Budget pie) need to be pushed to GitHub and deployed** — as of this log, user was heading to sleep before confirming the push landed. Verify next session that the live URL reflects tonight's work, and remind about the sw.js cache close-and-reopen requirement if anything looks stale on the phone.
+
+Everything else from every design conversation and every locked decision
+across the whole project history through 2026-08-15 is built and confirmed.
+See both 2026-08-15 session log entries above for everything built.
 
 ---
 
-*Last updated: 2026-07-28*
+*Last updated: 2026-08-15 (late session — Faith Report, Faith performance fix, Health Report, Time Budget pie)*
 
 ---
 

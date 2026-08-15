@@ -226,6 +226,19 @@ const DB = {
   saveGoals(g){ localStorage.setItem('lo_goals', JSON.stringify(g)); }
 };
 
+function nextTxId(){
+  let n = parseInt(localStorage.getItem('lo_tx_counter')||'1', 10);
+  localStorage.setItem('lo_tx_counter', n + 1);
+  return n;
+}
+
+function backfillTransactionIds(){
+  const list = DB.transactions();
+  let changed = false;
+  list.forEach(t => { if(!t.id){ t.id = nextTxId(); changed = true; } });
+  if(changed) DB.saveTransactions(list);
+}
+
 function todayStr(){ return new Date().toISOString().slice(0,10); }
 const TODAY = todayStr();
 let EDIT_DATE = todayStr();
@@ -234,6 +247,12 @@ let plankTimer = {running:false, start:null, elapsed:0, iv:null};
 let neglectDismissed = false;
 let cmpOffset = {faith:1, health:1, music:1, finance:1, growth:1};
 let reviewWeekOffset = 0;
+let financeReportOpen = false;
+let financeReportPeriod = 'month';
+let faithReportOpen = false;
+let faithReportPeriod = 'month';
+let healthReportOpen = false;
+let healthReportPeriod = 'month';
 let calMonthOffset = 0;
 let swalatInterval = null;
 
@@ -259,6 +278,8 @@ function healthScore(d){
   max++; if((h.plankSeconds||0)>0||h.plank) points++;
   max++; if((h.tennisMinutes||0)>0||h.tennis) points++;
   max++; if((h.runningKm||0)>0||h.running) points++;
+  max++; if((h.hikingMinutes||0)>0) points++;
+  max++; if((h.walkingMinutes||0)>0) points++;
   return Math.round((points/max)*100);
 }
 const GROWTH_ITEMS = ['frame','eyecontact','posture','metacognition','impulse','delayedgrat','nameemotion','spokeup','initiated','fear','words','listening','rehearsal','strictself','strictothers'];
@@ -427,6 +448,122 @@ function waveChartSvg(vals, color, color2){
   svg+='</svg>';
   return svg;
 }
+function sleepDonutSvg(totalHours, days, targetLow, targetHigh){
+  const W=290,H=155,cx=145,topcy=68,rx=80,ry=28,depth=20;
+  const px =t=>cx+rx*Math.sin(t);
+  const pyt=t=>topcy-ry*Math.cos(t);
+  const pyw=t=>topcy-ry*Math.cos(t)+depth;
+  const f2=n=>n.toFixed(2);
+
+  const maxH=days*24;
+  const tLoH=Math.round(targetLow*days), tHiH=Math.round(targetHigh*days);
+  const clampedH=Math.min(Math.max(totalHours,0),maxH);
+  const remH=maxH-clampedH;
+  const sleptPct=Math.round(clampedH/maxH*100);
+  const remPct=100-sleptPct;
+  const dispSlept=totalHours>0?(Math.round(clampedH*10)/10)+'h':'--';
+  const dispRem=(Math.round(remH*10)/10)+'h';
+  const targetAngle=(targetLow/24)*2*Math.PI;
+
+  let delta='';
+  if(totalHours>0){
+    if(totalHours>=tLoH&&totalHours<=tHiH) delta='on target';
+    else if(totalHours>tHiH) delta='+'+Math.round(totalHours-tHiH)+'h over';
+    else delta=Math.round(tLoH-totalHours)+'h short';
+  }
+
+  let svg=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px;height:auto;display:block;margin:0 auto">`;
+
+  if(totalHours<=0){
+    svg+=`<g style="filter:brightness(0.52)"><ellipse cx="${cx}" cy="${topcy+depth}" rx="${rx}" ry="${ry}" fill="var(--track-bg)"/></g>`;
+    svg+=`<ellipse cx="${cx}" cy="${topcy}" rx="${rx}" ry="${ry}" fill="var(--track-bg)"/>`;
+    svg+=`<line x1="${cx}" y1="${topcy}" x2="${f2(px(targetAngle))}" y2="${f2(pyt(targetAngle))}" stroke="var(--green)" stroke-width="1.5" stroke-dasharray="3 2" opacity="0.85"/>`;
+    svg+=`<ellipse cx="${cx-rx*0.15}" cy="${topcy-ry*0.35}" rx="${rx*0.48}" ry="${ry*0.4}" fill="white" opacity="0.09"/>`;
+    svg+='</svg>';
+    return `<div style="padding:8px 0">${svg}`+
+      `<div style="font-family:var(--mono);font-size:9px;color:var(--mute);text-align:center;letter-spacing:0.05em;margin-top:6px">SLEEP THIS PERIOD</div>`+
+      `<div style="font-family:DM Serif Display,serif;font-size:28px;font-weight:700;color:var(--text);text-align:center;line-height:1;margin-top:1px">--</div>`+
+      `<div style="font-family:Space Mono,monospace;font-size:8px;color:var(--mute);text-align:center;margin-top:3px">target ${tLoH}–${tHiH}h <span style="color:var(--green);opacity:0.7">●</span></div>`+
+      `</div>`;
+  }
+
+  const GAP=0.06;
+  const TARC=Math.PI*2-GAP*2;
+  const sleptSpan=clampedH/maxH*TARC;
+  const remSpan=remH/maxH*TARC;
+
+  const catData=[
+    {name:'Slept',     pct:sleptPct, amount:dispSlept, color:'var(--health)',   a0:0,                a1:sleptSpan            },
+    {name:'Remaining', pct:remPct,   amount:dispRem,   color:'#3d5066',         a0:sleptSpan+GAP,    a1:sleptSpan+GAP+remSpan}
+  ];
+
+  const FS=Math.PI/2, FE=3*Math.PI/2;
+
+  // 1. Walls
+  svg+='<g style="filter:brightness(0.52)">';
+  catData.forEach(({color,a0,a1})=>{
+    const wa0=Math.max(a0,FS),wa1=Math.min(a1,FE);
+    if(wa1<=wa0) return;
+    const lg=(wa1-wa0)>Math.PI?1:0;
+    svg+=`<path d="M${f2(px(wa0))},${f2(pyt(wa0))} A${rx},${ry},0,${lg},1,${f2(px(wa1))},${f2(pyt(wa1))} L${f2(px(wa1))},${f2(pyw(wa1))} A${rx},${ry},0,${lg},0,${f2(px(wa0))},${f2(pyw(wa0))} Z" fill="${color}"/>`;
+  });
+  svg+='</g>';
+
+  // 2. Top faces
+  catData.forEach(({color,a0,a1})=>{
+    const lg=(a1-a0)>Math.PI?1:0;
+    svg+=`<path d="M${cx},${topcy} L${f2(px(a0))},${f2(pyt(a0))} A${rx},${ry},0,${lg},1,${f2(px(a1))},${f2(pyt(a1))} Z" fill="${color}"/>`;
+  });
+
+  // 3. Dividers
+  catData.forEach(({a1})=>{
+    svg+=`<line x1="${cx}" y1="${topcy}" x2="${f2(px(a1))}" y2="${f2(pyt(a1))}" stroke="var(--bg)" stroke-width="1.5"/>`;
+  });
+
+  // 4. Target marker (dashed green — goal threshold, distinct from slice dividers)
+  svg+=`<line x1="${cx}" y1="${topcy}" x2="${f2(px(targetAngle))}" y2="${f2(pyt(targetAngle))}" stroke="var(--green)" stroke-width="1.5" stroke-dasharray="3 2" opacity="0.85"/>`;
+
+  // 5. Gloss
+  svg+=`<ellipse cx="${cx-rx*0.15}" cy="${topcy-ry*0.35}" rx="${rx*0.48}" ry="${ry*0.4}" fill="white" opacity="0.09"/>`;
+
+  // 6. Floating labels (same as financePieHtml — pct% / amount, suppressed below LABEL_THRESH)
+  const LABEL_THRESH=5;
+  catData.forEach(({amount,pct,color,a0,a1})=>{
+    if(pct<LABEL_THRESH) return;
+    const tm=(a0+a1)/2;
+    const rimx=px(tm),rimy=pyt(tm);
+    const dx=rimx-cx,dy=rimy-topcy;
+    const len=Math.sqrt(dx*dx+dy*dy)||1;
+    const nx=dx/len,ny=dy/len;
+    const LEAD=11;
+    const lx1=f2(rimx+nx*LEAD),ly1=f2(rimy+ny*LEAD);
+    const tx=f2(rimx+nx*(LEAD+4)),ty=f2(rimy+ny*(LEAD+4)+3);
+    const anchor=dx>=0?'start':'end';
+    svg+=`<line x1="${f2(rimx)}" y1="${f2(rimy)}" x2="${lx1}" y2="${ly1}" stroke="${color}" stroke-width="0.8" opacity="0.6"/>`;
+    svg+=`<text text-anchor="${anchor}" font-size="8" font-family="Space Mono,monospace" fill="${color}"><tspan x="${tx}" y="${ty}">${pct}%</tspan><tspan x="${tx}" dy="10">${amount}</tspan></text>`;
+  });
+
+  svg+='</svg>';
+
+  const legend='<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;padding:6px 12px 2px">'+
+    catData.map(({name,amount,color})=>
+      `<div style="display:flex;align-items:center;gap:5px">`+
+        `<span style="width:8px;height:8px;border-radius:2px;background:${color};flex-shrink:0"></span>`+
+        `<span style="font-family:var(--mono);font-size:8px;color:var(--mute);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${name}</span>`+
+        `<span style="font-family:var(--mono);font-size:8px;color:var(--text);flex-shrink:0">${amount}</span>`+
+      `</div>`
+    ).join('')+
+  '</div>';
+
+  const statLine=
+    `<div style="font-family:var(--mono);font-size:9px;color:var(--mute);text-align:center;letter-spacing:0.05em;margin-top:6px">SLEEP THIS PERIOD</div>`+
+    `<div style="font-family:DM Serif Display,serif;font-size:28px;font-weight:700;color:var(--text);text-align:center;line-height:1;margin-top:1px">${dispSlept}</div>`+
+    (delta
+      ?`<div style="font-family:Space Mono,monospace;font-size:9px;color:var(--mute);text-align:center;margin-top:2px">${delta} · target ${tLoH}–${tHiH}h</div>`
+      :`<div style="font-family:Space Mono,monospace;font-size:8px;color:var(--mute);text-align:center;margin-top:3px">target ${tLoH}–${tHiH}h <span style="color:var(--green);opacity:0.7">●</span></div>`);
+
+  return `<div style="padding:8px 0">${svg}${legend}${statLine}</div>`;
+}
 function sleepZoneChartSvg(vals, targetLow, targetHigh){
   const W=260, H=60, maxH=12;
   const hasData = vals.some(v=>v!==null&&v>0);
@@ -502,63 +639,296 @@ function isoCubeHtml(scores){
   svg+='</svg>';
   return svg;
 }
-function isoFacetCubeHtml(scores){
-  const isLight=document.documentElement.dataset.theme==='light';
-  // 8 vertices — original spec ×0.75, +5px y-offset for top clearance; viewBox 240×210
-  const top    =[120, 28];
-  const topL   =[68,  50];
-  const topR   =[173, 50];
-  const botL   =[68,  133];
-  const botR   =[173, 133];
-  const bottom =[120, 155];
-  const front  =[120, 73];
-  const back   =[120, 110];
-  const cats=['faith','health','music','finance','growth'];
-  const avg=Math.round(cats.reduce((s,k)=>s+(scores[k]||0),0)/cats.length);
-  const ec=isLight?'var(--home)':'#3DDCEC';
-  const fid='wfCubeGlow';
-  let svg='<svg viewBox="0 0 240 210" style="width:100%;height:auto;display:block">';
-  svg+='<defs>';
-  if(!isLight){
-    svg+='<filter id="'+fid+'" x="-60%" y="-60%" width="220%" height="220%">'
-      +'<feGaussianBlur stdDeviation="3" result="blur"/>'
-      +'<feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>'
-      +'</filter>';
+function fiveSliceDonutHtml(scores){
+  const cats=[
+    {k:'faith',   c:'var(--faith)'  },
+    {k:'health',  c:'var(--health)' },
+    {k:'music',   c:'var(--music)'  },
+    {k:'finance', c:'var(--finance)'},
+    {k:'growth',  c:'var(--growth)' }
+  ];
+  const total=cats.reduce((s,{k})=>s+(scores[k]||0),0);
+  const avg=Math.round(cats.reduce((s,{k})=>s+(scores[k]||0),0)/cats.length);
+
+  // Tilted 3D pie: top face on a flattened ellipse, depth wall only on front-facing arc.
+  // Angle convention: t=0 = top (12 o'clock), increases clockwise.
+  // px(t) = cx + rx*sin(t),  pyt(t) = topcy - ry*cos(t),  pyw(t) = pyt(t) + depth
+  // W=290 gives ~65px on each side of the pie (rx=80) for floating labels.
+  const W=290,H=155,cx=145,topcy=68,rx=80,ry=28,depth=20;
+  const px =t=>cx+rx*Math.sin(t);
+  const pyt=t=>topcy-ry*Math.cos(t);
+  const pyw=t=>topcy-ry*Math.cos(t)+depth;
+  const f2=n=>n.toFixed(2);
+
+  let svg=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px;height:auto;display:block;margin:0 auto">`;
+
+  if(total===0){
+    svg+=`<g style="filter:brightness(0.5)"><ellipse cx="${cx}" cy="${topcy+depth}" rx="${rx}" ry="${ry}" fill="var(--track-bg)"/></g>`;
+    svg+=`<ellipse cx="${cx}" cy="${topcy}" rx="${rx}" ry="${ry}" fill="var(--track-bg)"/>`;
+    svg+='</svg>';
+    const emptyLine=`<div style="font-family:var(--mono);font-size:9px;color:var(--mute);letter-spacing:0.05em;margin-top:4px">SCORE TODAY</div>`+
+      `<div style="font-family:DM Serif Display,serif;font-size:28px;font-weight:700;color:var(--mute);line-height:1;margin-top:1px">0</div>`;
+    return `<div style="text-align:center;padding:8px 0">${svg}${emptyLine}</div>`;
   }
-  svg+='</defs>';
-  const poly=(verts,fill,op)=>'<polygon points="'+verts.map(p=>p.join(',')).join(' ')+'" fill="'+fill+'" fill-opacity="'+op+'" stroke="none"/>';
-  svg+=poly([top,topR,front,topL],   'var(--home)',  '0.07');
-  svg+=poly([topR,botR,bottom,front],'var(--amber)', '0.06');
-  svg+=poly([topL,botL,bottom,front],'var(--green)', '0.06');
-  const ln=(a,b)=>'<line x1="'+a[0]+'" y1="'+a[1]+'" x2="'+b[0]+'" y2="'+b[1]+'" stroke="'+ec+'" stroke-width="1.5" stroke-linecap="round"/>';
-  const ga=(!isLight)?' filter="url(#'+fid+')"':'';
-  svg+='<g'+ga+'>';
-  svg+=ln(top,topR)+ln(topR,botR)+ln(botR,bottom)+ln(bottom,botL)+ln(botL,topL)+ln(topL,top);
-  svg+=ln(topR,front)+ln(topL,front)+ln(bottom,front);
-  svg+=ln(back,botR)+ln(back,botL)+ln(back,top);
+
+  const GAP=0.06;
+  const nz=cats.filter(({k})=>(scores[k]||0)>0).length;
+  const TARC=Math.PI*2-GAP*nz;
+  let angle=0;
+  const slices=[];
+  cats.forEach(({k,c})=>{
+    const sc=scores[k]||0;
+    if(!sc) return;
+    const span=sc/total*TARC;
+    slices.push({k,c,sc,a0:angle,a1:angle+span});
+    angle+=span+GAP;
+  });
+
+  // Front-visible arc: angles where pyt(t) > topcy, i.e. cos(t)<0, i.e. t∈(π/2, 3π/2)
+  const FS=Math.PI/2, FE=3*Math.PI/2;
+
+  // 1. Walls — darkened, only the front-visible portion of each slice's outer rim
+  svg+='<g style="filter:brightness(0.52)">';
+  slices.forEach(({c,a0,a1})=>{
+    const wa0=Math.max(a0,FS), wa1=Math.min(a1,FE);
+    if(wa1<=wa0) return;
+    const lg=(wa1-wa0)>Math.PI?1:0;
+    svg+=`<path d="M${f2(px(wa0))},${f2(pyt(wa0))} A${rx},${ry},0,${lg},1,${f2(px(wa1))},${f2(pyt(wa1))} L${f2(px(wa1))},${f2(pyw(wa1))} A${rx},${ry},0,${lg},0,${f2(px(wa0))},${f2(pyw(wa0))} Z" fill="${c}"/>`;
+  });
   svg+='</g>';
-  const dot=(p,c)=>'<circle cx="'+p[0]+'" cy="'+p[1]+'" r="2.8" fill="'+c+'" fill-opacity="0.95"/>';
-  const lead=(x1,y1,x2,y2,c)=>'<line x1="'+x1+'" y1="'+y1+'" x2="'+x2+'" y2="'+y2+'" stroke="'+c+'" stroke-width="0.8" stroke-opacity="0.55"/>';
-  const lbl=(x,y,t,c,a)=>'<text x="'+x+'" y="'+y+'" text-anchor="'+a+'" font-size="9" font-weight="700" font-family="Space Mono,monospace" fill="'+c+'">'+t+'</text>';
-  svg+=dot(top,'var(--home)');
-  svg+=lbl(120,17,'HOME','var(--home)','middle');
-  svg+=dot(topL,'var(--green)');
-  svg+=lead(59,45,66,51,'var(--green)');
-  svg+=lbl(57,45,'FAITH','var(--green)','end');
-  svg+=dot(topR,'var(--amber)');
-  svg+=lead(181,45,174,51,'var(--amber)');
-  svg+=lbl(183,45,'MUSIC','var(--amber)','start');
-  svg+=dot(botL,'var(--health)');
-  svg+=lead(59,140,66,133,'var(--health)');
-  svg+=lbl(57,145,'HEALTH','var(--health)','end');
-  svg+=dot(botR,'var(--finance)');
-  svg+=lead(181,140,174,133,'var(--finance)');
-  svg+=lbl(183,145,'FINANCE','var(--finance)','start');
-  svg+='<text x="120" y="174" text-anchor="middle" font-size="7.5" font-family="Space Mono,monospace" fill="var(--mute)" letter-spacing="0.5">OVERALL AVERAGE SCORE</text>';
-  svg+='<text x="120" y="200" text-anchor="middle" font-size="20" font-weight="700" font-family="DM Serif Display,serif" fill="var(--text)">'+avg+'</text>';
+
+  // 2. Top face pie sectors
+  slices.forEach(({c,a0,a1})=>{
+    const lg=(a1-a0)>Math.PI?1:0;
+    svg+=`<path d="M${cx},${topcy} L${f2(px(a0))},${f2(pyt(a0))} A${rx},${ry},0,${lg},1,${f2(px(a1))},${f2(pyt(a1))} Z" fill="${c}"/>`;
+  });
+
+  // 3. Divider lines between slices
+  slices.forEach(({a1})=>{
+    svg+=`<line x1="${cx}" y1="${topcy}" x2="${f2(px(a1))}" y2="${f2(pyt(a1))}" stroke="var(--bg)" stroke-width="1.5"/>`;
+  });
+
+  // 4. Gloss highlight (top-left portion of top face)
+  svg+=`<ellipse cx="${cx-rx*0.15}" cy="${topcy-ry*0.35}" rx="${rx*0.48}" ry="${ry*0.4}" fill="white" opacity="0.09"/>`;
+
+  // 5. Leader lines + floating labels — one per non-zero slice, omit at score 0
+  slices.forEach(({k,c,sc,a0,a1})=>{
+    const tm=(a0+a1)/2;
+    const rimx=px(tm), rimy=pyt(tm);
+    const dx=rimx-cx, dy=rimy-topcy;
+    const len=Math.sqrt(dx*dx+dy*dy)||1;
+    const nx=dx/len, ny=dy/len;
+    const LEAD=11;
+    const lx1=f2(rimx+nx*LEAD), ly1=f2(rimy+ny*LEAD);
+    const tx=f2(rimx+nx*(LEAD+4)), ty=f2(rimy+ny*(LEAD+4)+3);
+    const anchor=dx>=0?'start':'end';
+    const name=k.charAt(0).toUpperCase()+k.slice(1);
+    svg+=`<line x1="${f2(rimx)}" y1="${f2(rimy)}" x2="${lx1}" y2="${ly1}" stroke="${c}" stroke-width="0.8" opacity="0.6"/>`;
+    svg+=`<text x="${tx}" y="${ty}" text-anchor="${anchor}" font-size="8" font-family="Space Mono,monospace" fill="${c}">${name} ${sc}</text>`;
+  });
+
   svg+='</svg>';
-  return '<div style="padding:4px 0">'+svg+'</div>';
+  // Score label + number sit below the pie — same hierarchy as Code Score widget (mono label above, serif number below)
+  const statLine=`<div style="font-family:var(--mono);font-size:9px;color:var(--mute);letter-spacing:0.05em;margin-top:4px">SCORE TODAY</div>`+
+    `<div style="font-family:DM Serif Display,serif;font-size:28px;font-weight:700;color:var(--text);line-height:1;margin-top:1px">${avg}</div>`;
+  return `<div style="text-align:center;padding:8px 0">${svg}${statLine}</div>`;
 }
+// Colours assigned once so pie slices and legend squares always match.
+const FIN_CAT_COLORS={
+  'Rent':            'var(--finance)',
+  'Food':            'var(--green)',
+  'Business costs':  'var(--cyan)',
+  'Transport':       'var(--music)',
+  'Weed':            'var(--amber)',
+  'Cigarettes':      'var(--red)',
+  'Given to people': 'var(--faith)',
+  'Home bills':      'var(--health)',
+  'Other':           'var(--growth)'
+};
+
+// 3D tilted pie for Finance's 9 categories.
+// catData = [{name,amount,pct,color}], non-zero only, any order.
+// Floating labels suppressed for slices < LABEL_PCT_THRESHOLD (collision avoidance);
+// legend below covers every non-zero category regardless.
+function financePieHtml(catData, total){
+  const W=290,H=155,cx=145,topcy=68,rx=80,ry=28,depth=20;
+  const px =t=>cx+rx*Math.sin(t);
+  const pyt=t=>topcy-ry*Math.cos(t);
+  const pyw=t=>topcy-ry*Math.cos(t)+depth;
+  const f2=n=>n.toFixed(2);
+
+  let svg=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px;height:auto;display:block;margin:0 auto">`;
+
+  if(!catData.length||total===0){
+    svg+=`<g style="filter:brightness(0.5)"><ellipse cx="${cx}" cy="${topcy+depth}" rx="${rx}" ry="${ry}" fill="var(--track-bg)"/></g>`;
+    svg+=`<ellipse cx="${cx}" cy="${topcy}" rx="${rx}" ry="${ry}" fill="var(--track-bg)"/>`;
+    svg+='</svg>';
+    return `<div style="padding:8px 0">${svg}`+
+      `<div style="font-family:var(--mono);font-size:9px;color:var(--mute);text-align:center;letter-spacing:0.05em;margin-top:6px">TOTAL SPENT</div>`+
+      `<div style="font-family:DM Serif Display,serif;font-size:28px;font-weight:700;color:var(--mute);text-align:center;line-height:1;margin-top:1px">0</div></div>`;
+  }
+
+  const GAP=0.06;
+  const TARC=Math.PI*2-GAP*catData.length;
+  let angle=0;
+  const slices=[];
+  catData.forEach(({name,amount,pct,color})=>{
+    const span=amount/total*TARC;
+    slices.push({name,amount,pct,color,a0:angle,a1:angle+span});
+    angle+=span+GAP;
+  });
+
+  const FS=Math.PI/2,FE=3*Math.PI/2;
+
+  // 1. Walls — darkened, front-visible only
+  svg+='<g style="filter:brightness(0.52)">';
+  slices.forEach(({color,a0,a1})=>{
+    const wa0=Math.max(a0,FS),wa1=Math.min(a1,FE);
+    if(wa1<=wa0) return;
+    const lg=(wa1-wa0)>Math.PI?1:0;
+    svg+=`<path d="M${f2(px(wa0))},${f2(pyt(wa0))} A${rx},${ry},0,${lg},1,${f2(px(wa1))},${f2(pyt(wa1))} L${f2(px(wa1))},${f2(pyw(wa1))} A${rx},${ry},0,${lg},0,${f2(px(wa0))},${f2(pyw(wa0))} Z" fill="${color}"/>`;
+  });
+  svg+='</g>';
+
+  // 2. Top faces
+  slices.forEach(({color,a0,a1})=>{
+    const lg=(a1-a0)>Math.PI?1:0;
+    svg+=`<path d="M${cx},${topcy} L${f2(px(a0))},${f2(pyt(a0))} A${rx},${ry},0,${lg},1,${f2(px(a1))},${f2(pyt(a1))} Z" fill="${color}"/>`;
+  });
+
+  // 3. Dividers
+  slices.forEach(({a1})=>{
+    svg+=`<line x1="${cx}" y1="${topcy}" x2="${f2(px(a1))}" y2="${f2(pyt(a1))}" stroke="var(--bg)" stroke-width="1.5"/>`;
+  });
+
+  // 4. Gloss
+  svg+=`<ellipse cx="${cx-rx*0.15}" cy="${topcy-ry*0.35}" rx="${rx*0.48}" ry="${ry*0.4}" fill="white" opacity="0.09"/>`;
+
+  // 5. Floating labels only for slices ≥ 5% — smaller ones rely on the legend below
+  const LABEL_THRESH=5;
+  slices.forEach(({name,amount,pct,color,a0,a1})=>{
+    if(pct<LABEL_THRESH) return;
+    const tm=(a0+a1)/2;
+    const rimx=px(tm),rimy=pyt(tm);
+    const dx=rimx-cx,dy=rimy-topcy;
+    const len=Math.sqrt(dx*dx+dy*dy)||1;
+    const nx=dx/len,ny=dy/len;
+    const LEAD=11;
+    const lx1=f2(rimx+nx*LEAD),ly1=f2(rimy+ny*LEAD);
+    const tx=f2(rimx+nx*(LEAD+4)),ty=f2(rimy+ny*(LEAD+4)+3);
+    const anchor=dx>=0?'start':'end';
+    svg+=`<line x1="${f2(rimx)}" y1="${f2(rimy)}" x2="${lx1}" y2="${ly1}" stroke="${color}" stroke-width="0.8" opacity="0.6"/>`;
+    svg+=`<text text-anchor="${anchor}" font-size="8" font-family="Space Mono,monospace" fill="${color}"><tspan x="${tx}" y="${ty}">${pct}%</tspan><tspan x="${tx}" dy="10">${amount.toLocaleString()}</tspan></text>`;
+  });
+
+  svg+='</svg>';
+
+  // Legend — 2-col grid, every non-zero category regardless of label threshold
+  const legend='<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;padding:6px 12px 2px">'+
+    catData.map(({name,amount,color})=>
+      `<div style="display:flex;align-items:center;gap:5px">`+
+        `<span style="width:8px;height:8px;border-radius:2px;background:${color};flex-shrink:0"></span>`+
+        `<span style="font-family:var(--mono);font-size:8px;color:var(--mute);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${name}</span>`+
+        `<span style="font-family:var(--mono);font-size:8px;color:var(--text);flex-shrink:0">${amount.toLocaleString()}</span>`+
+      `</div>`
+    ).join('')+
+  '</div>';
+
+  const statLine=
+    `<div style="font-family:var(--mono);font-size:9px;color:var(--mute);text-align:center;letter-spacing:0.05em;margin-top:6px">TOTAL SPENT</div>`+
+    `<div style="font-family:DM Serif Display,serif;font-size:28px;font-weight:700;color:var(--text);text-align:center;line-height:1;margin-top:1px">${total.toLocaleString()}</div>`;
+
+  return `<div style="padding:8px 0">${svg}${legend}${statLine}</div>`;
+}
+
+// Time Budget multi-slice pie — direct adaptation of financePieHtml for 6 activity segments.
+// catData = [{name,mins,pct,color}], totalMins = period minutes, sleepStat = pre-built HTML string.
+function timeBudgetPieHtml(catData, totalMins, sleepStat){
+  const fmtMin=m=>m>=60?(Math.floor(m/60)+'h'+(m%60>0?' '+Math.round(m%60)+'m':'')):(Math.round(m)+'m');
+  const W=290,H=155,cx=145,topcy=68,rx=80,ry=28,depth=20;
+  const px =t=>cx+rx*Math.sin(t);
+  const pyt=t=>topcy-ry*Math.cos(t);
+  const pyw=t=>topcy-ry*Math.cos(t)+depth;
+  const f2=n=>n.toFixed(2);
+
+  let svg=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px;height:auto;display:block;margin:0 auto">`;
+
+  if(!catData.length||totalMins===0){
+    svg+=`<g style="filter:brightness(0.5)"><ellipse cx="${cx}" cy="${topcy+depth}" rx="${rx}" ry="${ry}" fill="var(--track-bg)"/></g>`;
+    svg+=`<ellipse cx="${cx}" cy="${topcy}" rx="${rx}" ry="${ry}" fill="var(--track-bg)"/>`;
+    svg+='</svg>';
+    return `<div style="padding:8px 0">${svg}<div style="font-family:var(--mono);font-size:9px;color:var(--mute);text-align:center;margin-top:6px">No activity logged for this period</div></div>`;
+  }
+
+  const GAP=0.06;
+  const TARC=Math.PI*2-GAP*catData.length;
+  let angle=0;
+  const slices=[];
+  catData.forEach(({name,mins,pct,color})=>{
+    const span=mins/totalMins*TARC;
+    slices.push({name,mins,pct,color,a0:angle,a1:angle+span});
+    angle+=span+GAP;
+  });
+
+  const FS=Math.PI/2,FE=3*Math.PI/2;
+
+  // 1. Walls
+  svg+='<g style="filter:brightness(0.52)">';
+  slices.forEach(({color,a0,a1})=>{
+    const wa0=Math.max(a0,FS),wa1=Math.min(a1,FE);
+    if(wa1<=wa0) return;
+    const lg=(wa1-wa0)>Math.PI?1:0;
+    svg+=`<path d="M${f2(px(wa0))},${f2(pyt(wa0))} A${rx},${ry},0,${lg},1,${f2(px(wa1))},${f2(pyt(wa1))} L${f2(px(wa1))},${f2(pyw(wa1))} A${rx},${ry},0,${lg},0,${f2(px(wa0))},${f2(pyw(wa0))} Z" fill="${color}"/>`;
+  });
+  svg+='</g>';
+
+  // 2. Top faces
+  slices.forEach(({color,a0,a1})=>{
+    const lg=(a1-a0)>Math.PI?1:0;
+    svg+=`<path d="M${cx},${topcy} L${f2(px(a0))},${f2(pyt(a0))} A${rx},${ry},0,${lg},1,${f2(px(a1))},${f2(pyt(a1))} Z" fill="${color}"/>`;
+  });
+
+  // 3. Dividers
+  slices.forEach(({a1})=>{
+    svg+=`<line x1="${cx}" y1="${topcy}" x2="${f2(px(a1))}" y2="${f2(pyt(a1))}" stroke="var(--bg)" stroke-width="1.5"/>`;
+  });
+
+  // 4. Gloss
+  svg+=`<ellipse cx="${cx-rx*0.15}" cy="${topcy-ry*0.35}" rx="${rx*0.48}" ry="${ry*0.4}" fill="white" opacity="0.09"/>`;
+
+  // 5. Labels — suppress segments < 2% (avoids invisible-sliver labels)
+  const LABEL_THRESH=2;
+  slices.forEach(({name,mins,pct,color,a0,a1})=>{
+    if(pct<LABEL_THRESH) return;
+    const tm=(a0+a1)/2;
+    const rimx=px(tm),rimy=pyt(tm);
+    const dx=rimx-cx,dy=rimy-topcy;
+    const len=Math.sqrt(dx*dx+dy*dy)||1;
+    const nx=dx/len,ny=dy/len;
+    const LEAD=11;
+    const lx1=f2(rimx+nx*LEAD),ly1=f2(rimy+ny*LEAD);
+    const tx=f2(rimx+nx*(LEAD+4)),ty=f2(rimy+ny*(LEAD+4)+3);
+    const anchor=dx>=0?'start':'end';
+    svg+=`<line x1="${f2(rimx)}" y1="${f2(rimy)}" x2="${lx1}" y2="${ly1}" stroke="${color}" stroke-width="0.8" opacity="0.6"/>`;
+    svg+=`<text text-anchor="${anchor}" font-size="8" font-family="Space Mono,monospace" fill="${color}"><tspan x="${tx}" y="${ty}">${pct}%</tspan><tspan x="${tx}" dy="10">${fmtMin(mins)}</tspan></text>`;
+  });
+
+  svg+='</svg>';
+
+  // Legend — same 2-col grid as Finance
+  const legend='<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;padding:6px 12px 2px">'+
+    catData.map(({name,mins,color})=>
+      `<div style="display:flex;align-items:center;gap:5px">`+
+        `<span style="width:8px;height:8px;border-radius:2px;background:${color};flex-shrink:0"></span>`+
+        `<span style="font-family:var(--mono);font-size:8px;color:var(--mute);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${name}</span>`+
+        `<span style="font-family:var(--mono);font-size:8px;color:var(--text);flex-shrink:0">${fmtMin(mins)}</span>`+
+      `</div>`
+    ).join('')+
+  '</div>';
+
+  return `<div style="padding:8px 0">${svg}${legend}${sleepStat}</div>`;
+}
+
 function donutStat(pct, label, noteText, color){
   return '<div style="text-align:center;padding:4px 0">'+
     ringSvg(pct,color,pct,64)+
@@ -781,7 +1151,9 @@ function openDayDetail(dateStr){
   if((h.matroutineReps||0)>0) hLines.push('Mat routine: '+h.matroutineReps+' reps'); else if(h.matroutine) hLines.push('Mat routine ✓');
   if((h.plankSeconds||0)>0) hLines.push('Plank: '+formatSeconds(h.plankSeconds)); else if(h.plank) hLines.push('Plank ✓');
   if((h.tennisMinutes||0)>0) hLines.push('Tennis: '+h.tennisMinutes+' min'); else if(h.tennis) hLines.push('Tennis ✓');
-  if((h.runningKm||0)>0) hLines.push('Running: '+h.runningKm+' km'); else if(h.running) hLines.push('Running ✓');
+  if((h.runningKm||0)>0||(h.runningMinutes||0)>0){let rs='Running:';if((h.runningKm||0)>0)rs+=' '+h.runningKm+'km';if((h.runningMinutes||0)>0)rs+=' '+h.runningMinutes+'min';hLines.push(rs);}else if(h.running)hLines.push('Running ✓');
+  if((h.hikingMinutes||0)>0) hLines.push('Hiking: '+h.hikingMinutes+' min');
+  if((h.walkingMinutes||0)>0) hLines.push('Walking: '+h.walkingMinutes+' min');
   html += '<div style="font-size:11px;color:var(--text);line-height:1.6">'+hLines.join('<br>')+'</div>';
 
   html += '<div style="font-family:var(--mono);font-size:9px;color:var(--music);letter-spacing:1px;margin:14px 0 6px">MUSIC</div>';
@@ -802,7 +1174,8 @@ function openDayDetail(dateStr){
   const txThatDay = DB.transactions().filter(t=>t.date===dateStr);
   if(txThatDay.length){
     txThatDay.forEach(t=>{
-      const txLabel = t.type.charAt(0).toUpperCase()+t.type.slice(1)+(t.category?' \u2014 '+t.category:'');
+      const txCatLabel = t.category==='Other'?(t.note||'Other'):t.category;
+      const txLabel = t.type.charAt(0).toUpperCase()+t.type.slice(1)+(txCatLabel?' \u2014 '+txCatLabel:'');
       html += '<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:11px;"><span>'+txLabel+'</span><span style="font-family:var(--mono);color:var(--finance)">'+t.amount.toLocaleString()+'</span></div>';
     });
   } else {
@@ -862,7 +1235,10 @@ function compareDayHtml(tab, color){
     rows+=cmpRow('Mat routine', repV(rh,'matroutineReps','matroutine'), repV(th,'matroutineReps','matroutine'));
     rows+=cmpRow('Plank', plankV(rh), plankV(th));
     rows+=cmpRow('Tennis', movV(rh,'tennisMinutes','tennis',' min'), movV(th,'tennisMinutes','tennis',' min'));
-    rows+=cmpRow('Running', movV(rh,'runningKm','running',' km'), movV(th,'runningKm','running',' km'));
+    rows+=cmpRow('Running (km)', movV(rh,'runningKm','running',' km'), movV(th,'runningKm','running',' km'));
+    rows+=cmpRow('Running (min)', movV(rh,'runningMinutes','',' min'), movV(th,'runningMinutes','',' min'));
+    rows+=cmpRow('Hiking', movV(rh,'hikingMinutes','',' min'), movV(th,'hikingMinutes','',' min'));
+    rows+=cmpRow('Walking', movV(rh,'walkingMinutes','',' min'), movV(th,'walkingMinutes','',' min'));
   }
 
   else if(tab==='music'){
@@ -1094,8 +1470,8 @@ function renderHome(){
   html += sectionLabel('CATEGORY BALANCE TODAY','var(--home)');
   html += '<div class="card">'+isoCubeHtml(scores)+'</div>';
 
-  html += sectionLabel('BALANCE — CUBE VIEW','var(--home)');
-  html += '<div class="card">'+isoFacetCubeHtml(scores)+'</div>';
+  html += sectionLabel('SCORE BREAKDOWN','var(--home)');
+  html += '<div class="card">'+fiveSliceDonutHtml(scores)+'</div>';
 
   html += sectionLabel('PERSONAL RECORDS','var(--amber)');
   const bests=computeAllTimeBests();
@@ -1246,6 +1622,8 @@ function calcPrayerTimes(dateStr){
 function renderFaithCountdown(){
   const el=document.getElementById('swalat-cd');
   if(!el)return;
+  // Skip silently when faith tab isn't visible — avoids background compositor pressure
+  if(!document.getElementById('s-faith').classList.contains('active'))return;
   const pt=calcPrayerTimes(TODAY);
   const names=['fajr','dhuhr','asr','maghrib','isha'];
   const labels={fajr:'Fajr',dhuhr:'Dhuhr',asr:'Asr',maghrib:'Maghrib',isha:'Isha'};
@@ -1267,6 +1645,15 @@ function renderFaithCountdown(){
   if(!nextName){el.innerHTML='';return;}
   const diff=Math.max(0,Math.floor((nextMs-now)/1000));
   const pad=n=>String(n).padStart(2,'0');
+  const digits=pad(Math.floor(diff/3600))+':'+pad(Math.floor(diff%3600/60))+':'+pad(diff%60);
+  // Fast path: only update digits textContent when prayer hasn't changed
+  const cdSpan=document.getElementById('swalat-cd-digits');
+  if(cdSpan&&el.dataset.cdPrayer===nextName){
+    cdSpan.textContent=digits;
+    return;
+  }
+  // Full build: first render or prayer just rolled over to the next one
+  el.dataset.cdPrayer=nextName;
   el.innerHTML='<div style="text-align:center;padding:10px 0">'
     +'<div style="font-family:var(--mono);font-size:8px;color:var(--mute);letter-spacing:1px">NEXT PRAYER</div>'
     +'<div style="margin:5px 0 2px">'
@@ -1274,16 +1661,185 @@ function renderFaithCountdown(){
     +'<span style="font-family:var(--mono);font-size:13px;color:var(--mute);margin:0 5px">&middot;</span>'
     +'<span style="font-family:var(--mono);font-size:14px;color:var(--faith)">'+nextDisp+'</span>'
     +'</div>'
-    +'<div style="font-family:var(--mono);font-size:30px;font-weight:700;color:var(--text);letter-spacing:3px;margin:4px 0">'+pad(Math.floor(diff/3600))+':'+pad(Math.floor(diff%3600/60))+':'+pad(diff%60)+'</div>'
+    +'<div id="swalat-cd-digits" style="font-family:var(--mono);font-size:30px;font-weight:700;color:var(--text);letter-spacing:3px;margin:4px 0">'+digits+'</div>'
     +'<div style="font-family:var(--mono);font-size:8px;color:var(--mute);letter-spacing:1px">REMAINING</div>'
     +'</div>';
+}
+
+function computeFaithBests(){
+  const all = DB.allDays();
+  const dates = Object.keys(all).sort();
+  const prayers = ['fajr','dhuhr','asr','maghrib','isha'];
+  const extras = ['tahajjud','fasting','dhikr','gratitude'];
+  const runs = {};
+  const bests = {};
+  [...prayers,...extras].forEach(k=>{ runs[k]=0; bests[k]=0; });
+  dates.forEach(ds=>{
+    const r = all[ds];
+    const f = r.faith || {};
+    prayers.forEach(k=>{
+      if(f[k]==='caught'){ runs[k]++; if(runs[k]>bests[k]) bests[k]=runs[k]; } else runs[k]=0;
+    });
+    extras.forEach(k=>{
+      if(f[k]===true){ runs[k]++; if(runs[k]>bests[k]) bests[k]=runs[k]; } else runs[k]=0;
+    });
+  });
+  return bests;
+}
+
+/* ============ FAITH REPORT ============ */
+function renderFaithReport(s){
+  const allTxs = DB.allDays();
+  const allDates = Object.keys(allTxs).sort();
+
+  // Period filter — identical pattern to Finance report
+  let periodDates;
+  if(faithReportPeriod==='today'){
+    periodDates = allDates.filter(d=>d===EDIT_DATE);
+  } else if(faithReportPeriod==='week'){
+    const d=new Date(EDIT_DATE);
+    const daysSinceMon=(d.getDay()+6)%7;
+    d.setDate(d.getDate()-daysSinceMon);
+    const weekStart=d.toISOString().slice(0,10);
+    periodDates = allDates.filter(d=>d>=weekStart&&d<=EDIT_DATE);
+  } else if(faithReportPeriod==='3week'){
+    const cut=new Date(EDIT_DATE); cut.setDate(cut.getDate()-20);
+    const cutStr=cut.toISOString().slice(0,10);
+    periodDates = allDates.filter(d=>d>=cutStr&&d<=EDIT_DATE);
+  } else if(faithReportPeriod==='month'){
+    periodDates = allDates.filter(d=>d.startsWith(EDIT_DATE.slice(0,7)));
+  } else if(faithReportPeriod==='3month'){
+    const cut=new Date(EDIT_DATE); cut.setMonth(cut.getMonth()-3);
+    const cutStr=cut.toISOString().slice(0,10);
+    periodDates = allDates.filter(d=>d>=cutStr);
+  } else {
+    periodDates = allDates;
+  }
+
+  const periodRecs = periodDates.map(d=>allTxs[d]).filter(Boolean);
+  const faithRecs = periodRecs.filter(r=>r.faith);
+  const N = faithRecs.length; // logged days with faith data in period
+
+  // Header + back
+  let html =
+    `<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">`+
+    `<button class="btn-ghost" id="faith-report-back" style="border-color:var(--faith);color:var(--faith);padding:6px 14px;font-size:12px">← Back</button>`+
+    `<span style="font-family:var(--mono);font-size:9px;color:var(--mute);letter-spacing:0.05em">FAITH REPORT</span>`+
+    `</div>`;
+
+  // Two-row period selector
+  const row1=[['today','Today'],['week','This Week'],['3week','Last 3 Weeks']];
+  const row2=[['month','This Month'],['3month','Last 3 Months'],['all','All Time']];
+  html+=`<div class="btn-group" style="margin-bottom:6px">`;
+  row1.forEach(([key,label])=>{ html+=`<button class="opt-btn faith-period${faithReportPeriod===key?' sel':''}" data-period="${key}">${label}</button>`; });
+  html+=`</div><div class="btn-group" style="margin-bottom:14px">`;
+  row2.forEach(([key,label])=>{ html+=`<button class="opt-btn faith-period${faithReportPeriod===key?' sel':''}" data-period="${key}">${label}</button>`; });
+  html+=`</div>`;
+
+  // ── PRAYER BREAKDOWN ──
+  html += sectionLabel('PRAYER BREAKDOWN','var(--faith)');
+  const prayers = [['fajr','Fajr'],['dhuhr','Dhuhr'],['asr','Asr'],['maghrib','Maghrib'],['isha','Isha']];
+
+  if(N===0){
+    html += `<div class="card" style="color:var(--mute);font-size:12px;text-align:center;padding:20px">No Faith data logged for this period</div>`;
+  } else {
+    html += `<div class="card" style="padding:12px 14px">`;
+    // Legend row
+    html += `<div style="display:flex;gap:12px;margin-bottom:10px;font-family:var(--mono);font-size:8px;color:var(--mute)">`;
+    html += `<span style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:2px;background:var(--green);display:inline-block"></span>Caught</span>`;
+    html += `<span style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:2px;background:var(--amber);display:inline-block"></span>Delayed</span>`;
+    html += `<span style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:2px;background:var(--red);display:inline-block"></span>Missed</span>`;
+    html += `<span style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:2px;background:var(--track-bg);display:inline-block"></span>Unlogged</span>`;
+    html += `</div>`;
+
+    prayers.forEach(([key, name])=>{
+      const c = faithRecs.filter(r=>r.faith[key]==='caught').length;
+      const d = faithRecs.filter(r=>r.faith[key]==='delayed').length;
+      const m = faithRecs.filter(r=>r.faith[key]==='notprayed').length;
+      const u = N - c - d - m; // unlogged within faith-logged days
+      const pct = v => N>0 ? (v/N*100).toFixed(1) : 0;
+      html += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">`;
+      html += `<span style="font-family:var(--mono);font-size:9px;color:var(--mute);width:48px;flex-shrink:0">${name}</span>`;
+      html += `<div style="flex:1;display:flex;height:14px;border-radius:4px;overflow:hidden;background:var(--track-bg)">`;
+      if(c>0) html += `<div style="flex:${c};background:var(--green);opacity:0.85"></div>`;
+      if(d>0) html += `<div style="flex:${d};background:var(--amber);opacity:0.85"></div>`;
+      if(m>0) html += `<div style="flex:${m};background:var(--red);opacity:0.85"></div>`;
+      if(u>0) html += `<div style="flex:${u};background:transparent"></div>`;
+      html += `</div>`;
+      html += `<span style="font-family:var(--mono);font-size:8px;color:var(--mute);width:72px;flex-shrink:0;text-align:right">`;
+      html += `<span style="color:var(--green)">${c}C</span> <span style="color:var(--amber)">${d}D</span> <span style="color:var(--red)">${m}M</span>`;
+      html += `</span></div>`;
+    });
+    html += `<div style="font-family:var(--mono);font-size:8px;color:var(--mute);margin-top:4px">${N} day${N===1?'':'s'} logged in period</div>`;
+    html += `</div>`;
+  }
+
+  // ── EXTRA PRACTICE ──
+  html += sectionLabel('EXTRA PRACTICE','var(--faith)');
+  const extras = [['tahajjud','Tahajjud'],['fasting','Fasting'],['dhikr','Dhikr'],['gratitude','Gratitude Swalat']];
+  if(N===0){
+    html += `<div class="card" style="color:var(--mute);font-size:12px;text-align:center;padding:16px">No data for this period</div>`;
+  } else {
+    html += `<div class="card">`;
+    extras.forEach(([key,label])=>{
+      const cnt = faithRecs.filter(r=>r.faith[key]===true).length;
+      html += `<div class="stat-row"><span>${label}</span>`+
+        `<span style="font-family:var(--mono);color:${cnt>0?'var(--faith)':'var(--mute)'}">`;
+      if(N>0){
+        html += `${cnt} / ${N} day${N===1?'':'s'}`;
+      } else {
+        html += `--`;
+      }
+      html += `</span></div>`;
+    });
+    html += `</div>`;
+  }
+
+  // ── STREAKS ──
+  html += sectionLabel('STREAKS','var(--faith)');
+  const bests = computeFaithBests();
+  const items = [
+    ...prayers.map(([k,n])=>({key:k, label:n, current:computeStreak(r=>r.faith&&r.faith[k]==='caught')})),
+    ...extras.map(([k,n])=>({key:k, label:n, current:computeStreak(r=>r.faith&&r.faith[k]===true)}))
+  ];
+  html += `<div class="card">`;
+  html += `<div style="display:flex;padding:4px 0 6px;border-bottom:1px solid var(--sep-alt);font-family:var(--mono);font-size:8px;color:var(--mute)">`;
+  html += `<span style="flex:1"></span><span style="width:80px;text-align:right">Current</span><span style="width:80px;text-align:right">Best ever</span></div>`;
+  items.forEach(({key,label,current})=>{
+    const best = bests[key] || 0;
+    const hasData = current>0 || best>0;
+    html += `<div class="stat-row">`;
+    html += `<span style="font-size:11px">${label}</span>`;
+    html += `<span style="display:flex;gap:0">`;
+    html += `<span style="font-family:var(--mono);font-size:10px;width:80px;text-align:right;color:${current>0?'var(--faith)':'var(--mute)'}">${hasData||current>0?current+' d':'--'}</span>`;
+    html += `<span style="font-family:var(--mono);font-size:10px;width:80px;text-align:right;color:${best>0?'var(--faith)':'var(--mute)'}">${best>0?best+' d':'--'}</span>`;
+    html += `</span></div>`;
+  });
+  html += `</div>`;
+
+  s.innerHTML = html;
+
+  s.querySelector('#faith-report-back').addEventListener('click',()=>{
+    faithReportOpen=false;
+    renderFaith();
+  });
+  s.querySelectorAll('.faith-period').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      faithReportPeriod=btn.dataset.period;
+      renderFaithReport(s);
+    });
+  });
 }
 
 /* ============ FAITH ============ */
 function renderFaith(){
   const s = document.getElementById('s-faith');
+  if(faithReportOpen){ renderFaithReport(s); return; }
   const prayers = [['fajr','Fajr'],['dhuhr','Dhuhr'],['asr','Asr'],['maghrib','Maghrib'],['isha','Isha']];
-  let html = compareDayHtml('faith','var(--faith)');
+  let html = `<div style="display:flex;justify-content:flex-end;margin-bottom:8px">`+
+    `<button class="btn-ghost" id="open-faith-report" style="border-color:var(--faith);color:var(--faith);padding:6px 14px;font-size:12px">Report →</button>`+
+    `</div>`;
+  html += compareDayHtml('faith','var(--faith)');
   html += '<div class="card" id="swalat-cd" style="min-height:80px">'+'</div>';
   html += sectionLabel('PRAYERS TODAY, TAP TO SET','var(--faith)');
   html += '<div class="card">';
@@ -1327,7 +1883,11 @@ function renderFaith(){
   s.innerHTML = html;
   wireCmpArrows(s, 'faith', renderFaith);
 
-  s.querySelectorAll('.pill').forEach(p=>{
+  document.getElementById('open-faith-report').addEventListener('click',()=>{
+    faithReportOpen=true;
+    renderFaith();
+  });
+  s.querySelectorAll('[data-prayer]').forEach(p=>{
     p.addEventListener('click', ()=>{ day.faith[p.dataset.prayer]=p.dataset.state; renderFaith(); });
   });
   s.querySelectorAll('[data-yn-key]').forEach(p=>{
@@ -1436,20 +1996,26 @@ function openRepModal(key){
   });
 }
 function openMovementModal(type){
-  const isTennis=type==='tennis';
-  const key=isTennis?'tennisMinutes':'runningKm';
-  const label=isTennis?'Tennis':'Running';
-  const unit=isTennis?'MINUTES':'KM';
-  const current=day.health[key]||0;
+  const cfg={
+    tennis:         {key:'tennisMinutes', label:'Tennis',  unit:'MINUTES',step:'1'},
+    tennisMinutes:  {key:'tennisMinutes', label:'Tennis',  unit:'MINUTES',step:'1'},
+    running:        {key:'runningKm',     label:'Running', unit:'KM',     step:'0.1'},
+    runningKm:      {key:'runningKm',     label:'Running', unit:'KM',     step:'0.1'},
+    runningMinutes: {key:'runningMinutes',label:'Running', unit:'MINUTES',step:'1'},
+    hikingMinutes:  {key:'hikingMinutes', label:'Hiking',  unit:'MINUTES',step:'1'},
+    walkingMinutes: {key:'walkingMinutes',label:'Walking', unit:'MINUTES',step:'1'},
+  };
+  const c=cfg[type]; if(!c) return;
+  const current=day.health[c.key]||0;
   openModal(
-    '<div class="modal-title">'+label+'</div>'+
-    '<label style="font-family:var(--mono);font-size:9px;color:var(--mute)">'+unit+'</label>'+
-    '<input type="number" class="input" id="mv-input" value="'+(current||'')+'" placeholder="0" min="0" step="'+(isTennis?'1':'0.1')+'">'+
+    '<div class="modal-title">'+c.label+'</div>'+
+    '<label style="font-family:var(--mono);font-size:9px;color:var(--mute)">'+c.unit+'</label>'+
+    '<input type="number" class="input" id="mv-input" value="'+(current||'')+'" placeholder="0" min="0" step="'+c.step+'">'+
     '<div class="modal-actions"><button class="btn-cancel" id="mv-cancel">Cancel</button><button class="btn-primary" id="mv-save">Save</button></div>'
   );
   document.getElementById('mv-cancel').addEventListener('click',closeModal);
   document.getElementById('mv-save').addEventListener('click',()=>{
-    day.health[key]=parseFloat(document.getElementById('mv-input').value)||0;
+    day.health[c.key]=parseFloat(document.getElementById('mv-input').value)||0;
     closeModal(); renderHealth();
   });
 }
@@ -1477,11 +2043,246 @@ function computeAllTimeBests(){
   return b;
 }
 
+function computeHealthBests(){
+  const all = DB.allDays();
+  const dates = Object.keys(all).sort();
+  const runs = {smokeFree:0,pushupsReps:0,abrollerReps:0,kegelReps:0,matroutineReps:0,plankSeconds:0};
+  const bests = {smokeFree:0,pushupsReps:0,abrollerReps:0,kegelReps:0,matroutineReps:0,plankSeconds:0};
+  dates.forEach(ds=>{
+    const h = (all[ds]&&all[ds].health)||{};
+    const check=(k,cond)=>{ if(cond){runs[k]++;if(runs[k]>bests[k])bests[k]=runs[k];}else runs[k]=0; };
+    check('smokeFree', h.smokeFree===true);
+    check('pushupsReps', (h.pushupsReps||0)>0||h.pushups);
+    check('abrollerReps', (h.abrollerReps||0)>0||h.abroller);
+    check('kegelReps', (h.kegelReps||0)>0||h.kegel);
+    check('matroutineReps', (h.matroutineReps||0)>0||h.matroutine);
+    check('plankSeconds', (h.plankSeconds||0)>0||h.plank);
+  });
+  return bests;
+}
+
+/* ============ HEALTH REPORT ============ */
+function renderHealthReport(s){
+  const all = DB.allDays();
+  const allDates = Object.keys(all).sort();
+
+  let periodDates;
+  if(healthReportPeriod==='today'){
+    periodDates = allDates.filter(d=>d===EDIT_DATE);
+  } else if(healthReportPeriod==='week'){
+    const d=new Date(EDIT_DATE); const daysSinceMon=(d.getDay()+6)%7; d.setDate(d.getDate()-daysSinceMon);
+    const weekStart=d.toISOString().slice(0,10);
+    periodDates = allDates.filter(d=>d>=weekStart&&d<=EDIT_DATE);
+  } else if(healthReportPeriod==='3week'){
+    const cut=new Date(EDIT_DATE); cut.setDate(cut.getDate()-20);
+    periodDates = allDates.filter(d=>d>=cut.toISOString().slice(0,10)&&d<=EDIT_DATE);
+  } else if(healthReportPeriod==='month'){
+    periodDates = allDates.filter(d=>d.startsWith(EDIT_DATE.slice(0,7)));
+  } else if(healthReportPeriod==='3month'){
+    const cut=new Date(EDIT_DATE); cut.setMonth(cut.getMonth()-3);
+    periodDates = allDates.filter(d=>d>=cut.toISOString().slice(0,10));
+  } else {
+    periodDates = allDates;
+  }
+
+  const periodRecs = periodDates.map(d=>all[d]).filter(Boolean);
+  const healthRecs = periodRecs.filter(r=>r.health);
+  const N = healthRecs.length;
+
+  // Calendar days in selected period (for sleep donut denominator: total available hours = periodDays×24)
+  let periodDays=1;
+  if(healthReportPeriod==='today') periodDays=1;
+  else if(healthReportPeriod==='week'){ const d=new Date(EDIT_DATE); periodDays=(d.getDay()+6)%7+1; }
+  else if(healthReportPeriod==='3week') periodDays=21;
+  else if(healthReportPeriod==='month') periodDays=parseInt(EDIT_DATE.slice(8,10));
+  else if(healthReportPeriod==='3month') periodDays=90;
+  else { // all time
+    if(allDates.length>0){ const first=new Date(allDates[0]+'T00:00:00'),last=new Date(EDIT_DATE+'T00:00:00'); periodDays=Math.round((last-first)/86400000)+1; } else periodDays=1;
+  }
+
+  let html =
+    `<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">`+
+    `<button class="btn-ghost" id="health-report-back" style="border-color:var(--health);color:var(--health);padding:6px 14px;font-size:12px">← Back</button>`+
+    `<span style="font-family:var(--mono);font-size:9px;color:var(--mute);letter-spacing:0.05em">HEALTH REPORT</span>`+
+    `</div>`;
+
+  const row1=[['today','Today'],['week','This Week'],['3week','Last 3 Weeks']];
+  const row2=[['month','This Month'],['3month','Last 3 Months'],['all','All Time']];
+  html+=`<div class="btn-group" style="margin-bottom:6px">`;
+  row1.forEach(([key,label])=>{ html+=`<button class="opt-btn health-period${healthReportPeriod===key?' sel':''}" data-period="${key}">${label}</button>`; });
+  html+=`</div><div class="btn-group" style="margin-bottom:14px">`;
+  row2.forEach(([key,label])=>{ html+=`<button class="opt-btn health-period${healthReportPeriod===key?' sel':''}" data-period="${key}">${label}</button>`; });
+  html+=`</div>`;
+
+  // ── HABIT CONSISTENCY ──
+  // Water threshold: >=5 glasses = full point (matches healthScore() partial-credit ceiling)
+  // Brushing threshold: >=2 sessions = full point (same rationale)
+  html += sectionLabel('HABIT CONSISTENCY','var(--health)');
+  if(N===0){
+    html += `<div class="card" style="color:var(--mute);font-size:12px;text-align:center;padding:20px">No Health data logged for this period</div>`;
+  } else {
+    const goodHabits=[['fruits','Fruits'],['milk','Milk'],['stopstart','Stop-start'],['smokeFree','Smoke-free'],['knifesharpening','Knife sharpening'],['penilemassage','Penile massage']];
+    const cnt={};
+    goodHabits.forEach(([k])=>{ cnt[k]=healthRecs.filter(r=>r.health[k]===true).length; });
+    cnt.water_target = healthRecs.filter(r=>(r.health.water||0)>0).length;
+    cnt.brushing_target = healthRecs.filter(r=>(r.health.brushing||0)>=2).length;
+    const bars=[...goodHabits,['water_target','Water (any)'],['brushing_target','Brushing (×2)']];
+    html += `<div class="card" style="padding:12px 14px">`;
+    html += `<div style="display:flex;gap:12px;margin-bottom:10px;font-family:var(--mono);font-size:8px;color:var(--mute)">`;
+    html += `<span style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:2px;background:var(--green);display:inline-block"></span>Done</span>`;
+    html += `<span style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:2px;background:var(--track-bg);display:inline-block"></span>Not logged</span>`;
+    html += `</div>`;
+    bars.forEach(([key,name])=>{
+      const done=cnt[key]||0; const rest=N-done;
+      html += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">`;
+      html += `<span style="font-family:var(--mono);font-size:9px;color:var(--mute);width:94px;flex-shrink:0">${name}</span>`;
+      html += `<div style="flex:1;display:flex;height:14px;border-radius:4px;overflow:hidden;background:var(--track-bg)">`;
+      if(done>0) html += `<div style="flex:${done};background:var(--green);opacity:0.85"></div>`;
+      if(rest>0) html += `<div style="flex:${rest};background:transparent"></div>`;
+      html += `</div>`;
+      html += `<span style="font-family:var(--mono);font-size:8px;color:${done>0?'var(--green)':'var(--mute)'};width:36px;flex-shrink:0;text-align:right">${done}/${N}</span>`;
+      html += `</div>`;
+    });
+    const junkFree=healthRecs.filter(r=>r.health.junk!==true).length;
+    const weedFree=healthRecs.filter(r=>r.health.weed!==true).length;
+    const nbFree=healthRecs.filter(r=>r.health.nailbiting!==true).length;
+    html += `<div style="border-top:1px solid var(--sep-alt);margin-top:8px;padding-top:10px">`;
+    html += `<div style="font-family:var(--mono);font-size:8px;color:var(--mute);margin-bottom:6px;letter-spacing:1px">AVOIDANCES</div>`;
+    [['Junk-free',junkFree],['Weed-free',weedFree],['Nail-biting-free',nbFree]].forEach(([label,c])=>{
+      html += `<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:12px">`;
+      html += `<span>${label}</span><span style="font-family:var(--mono);color:${c===N?'var(--green)':c>0?'var(--health)':'var(--mute)'}">${c}/${N} days</span>`;
+      html += `</div>`;
+    });
+    html += `</div></div>`;
+  }
+
+  // ── TIME BUDGET ──
+  const sleepDates = periodDates.slice(-60);
+  const sleepVals = sleepDates.map(d=>{ const r=all[d]; return (r&&r.health&&r.health.sleepHours>0)?r.health.sleepHours:null; });
+  const totalSleepH = healthRecs.reduce((s,r)=>s+(r.health.sleepHours||0),0);
+  // Pre-compute activity totals used by both the pie and the STAMINA section
+  const totTennis = healthRecs.reduce((s,r)=>s+(r.health.tennisMinutes||0),0);
+  const totRunMin  = healthRecs.reduce((s,r)=>s+(r.health.runningMinutes||0),0);
+  const totHiking  = healthRecs.reduce((s,r)=>s+(r.health.hikingMinutes||0),0);
+  const totWalking = healthRecs.reduce((s,r)=>s+(r.health.walkingMinutes||0),0);
+
+  html += sectionLabel('TIME BUDGET','var(--health)');
+  if(healthReportPeriod!=='today'){
+    const totalMinsInPeriod = periodDays*24*60;
+    const sleepMins = Math.round(totalSleepH*60);
+    const unaccountedMins = Math.max(0, totalMinsInPeriod-(sleepMins+totTennis+totRunMin+totHiking+totWalking));
+    const allBudgetSegs=[
+      {name:'Sleep',       mins:sleepMins,        color:'#e07843'},
+      {name:'Tennis',      mins:totTennis,        color:'#5ba8a0'},
+      {name:'Running',     mins:totRunMin,        color:'#6aab7a'},
+      {name:'Hiking',      mins:totHiking,        color:'#8b9e6a'},
+      {name:'Walking',     mins:totWalking,       color:'#5b7eb8'},
+      {name:'Unaccounted', mins:unaccountedMins,  color:'#3d5066'},
+    ];
+    const budgetSegs=allBudgetSegs.filter(s=>s.mins>0);
+    const budgetTotal=budgetSegs.reduce((s,a)=>s+a.mins,0)||1;
+    budgetSegs.forEach(s=>{ s.pct=Math.round(s.mins/budgetTotal*100); });
+    const tLoH=Math.round(7*periodDays), tHiH=Math.round(9*periodDays);
+    const dispSleepH=totalSleepH>0?(Math.round(totalSleepH*10)/10)+'h':'--';
+    let sleepDelta='';
+    if(totalSleepH>0){
+      if(totalSleepH>=tLoH&&totalSleepH<=tHiH) sleepDelta=' · on target';
+      else if(totalSleepH>tHiH) sleepDelta=' · '+Math.round(totalSleepH-tHiH)+'h over';
+      else sleepDelta=' · '+Math.round(tLoH-totalSleepH)+'h short';
+    }
+    const sleepStatHtml=`<div style="font-family:var(--mono);font-size:9px;color:var(--mute);text-align:center;padding:2px 12px 6px;line-height:1.7">Sleep: ${dispSleepH} this period · target ${tLoH}–${tHiH}h${sleepDelta}</div>`;
+    html += `<div class="card" style="padding:16px 14px 10px">${timeBudgetPieHtml(budgetSegs,budgetTotal,sleepStatHtml)}</div>`;
+  }
+  // Day-by-day Sleep Trend bar chart — unchanged, answers which nights were short
+  const hasSleep = sleepVals.some(v=>v!==null&&v>0);
+  if(hasSleep){
+    html += `<div class="card">`+sleepZoneChartSvg(sleepVals,7,9);
+    if(sleepDates.length<=10){
+      html += `<div class="trend-labels">`+sleepDates.map(d=>`<span>${new Date(d+'T00:00:00').toLocaleDateString('en-US',{weekday:'short'}).charAt(0)}</span>`).join('')+`</div>`;
+    }
+    html += `</div>`;
+  }
+
+  // ── STAMINA RECORDS ──
+  html += sectionLabel('STAMINA RECORDS','var(--health)');
+  const allB = computeAllTimeBests();
+  const pB = {pushupsReps:0,abrollerReps:0,kegelReps:0,matroutineReps:0,plankSeconds:0};
+  let totRunning=0;
+  healthRecs.forEach(r=>{
+    const h=r.health;
+    pB.pushupsReps=Math.max(pB.pushupsReps,h.pushupsReps||0);
+    pB.abrollerReps=Math.max(pB.abrollerReps,h.abrollerReps||0);
+    pB.kegelReps=Math.max(pB.kegelReps,h.kegelReps||0);
+    pB.matroutineReps=Math.max(pB.matroutineReps,h.matroutineReps||0);
+    pB.plankSeconds=Math.max(pB.plankSeconds,h.plankBestSession||h.plankSeconds||0);
+    totRunning+=h.runningKm||0;
+  });
+  totRunning=Math.round(totRunning*10)/10;
+  if(N===0){
+    html += `<div class="card" style="color:var(--mute);font-size:12px;text-align:center;padding:20px">No data for this period</div>`;
+  } else {
+    html += `<div class="card">`;
+    html += `<div style="display:flex;padding:4px 0 6px;border-bottom:1px solid var(--sep-alt);font-family:var(--mono);font-size:8px;color:var(--mute)">`;
+    html += `<span style="flex:1"></span><span style="width:90px;text-align:right">Period best</span><span style="width:80px;text-align:right">All time</span></div>`;
+    [['pushupsReps','Push-ups','reps'],['abrollerReps','Ab roller','reps'],['kegelReps','Kegel','reps'],['matroutineReps','Mat routine','reps']].forEach(([k,label,unit])=>{
+      const pv=pB[k], av=allB[k]||0;
+      html += `<div class="stat-row"><span style="font-size:11px">${label}</span><span style="display:flex">`;
+      html += `<span style="font-family:var(--mono);font-size:10px;width:90px;text-align:right;color:${pv>0?'var(--health)':'var(--mute)'}">${pv>0?pv+' '+unit:'--'}</span>`;
+      html += `<span style="font-family:var(--mono);font-size:10px;width:80px;text-align:right;color:${av>0?'var(--amber)':'var(--mute)'}">${av>0?av+' '+unit:'--'}</span>`;
+      html += `</span></div>`;
+    });
+    const pp=pB.plankSeconds, ap=allB.plankSeconds||0;
+    html += `<div class="stat-row"><span style="font-size:11px">Plank</span><span style="display:flex">`;
+    html += `<span style="font-family:var(--mono);font-size:10px;width:90px;text-align:right;color:${pp>0?'var(--health)':'var(--mute)'}">${pp>0?formatSeconds(pp):'--'}</span>`;
+    html += `<span style="font-family:var(--mono);font-size:10px;width:80px;text-align:right;color:${ap>0?'var(--amber)':'var(--mute)'}">${ap>0?formatSeconds(ap):'--'}</span>`;
+    html += `</span></div></div>`;
+    html += `<div class="card">`;
+    html += `<div class="stat-row"><span>Tennis this period</span><span style="font-family:var(--mono);color:${totTennis>0?'var(--health)':'var(--mute)'}">${totTennis>0?totTennis+' min':'--'}</span></div>`;
+    html += `<div class="stat-row"><span>Running this period</span><span style="font-family:var(--mono);color:${(totRunning>0||totRunMin>0)?'var(--health)':'var(--mute)'}">${totRunning>0?totRunning+' km':'--'}${totRunMin>0?' / '+totRunMin+' min':''}</span></div>`;
+    html += `<div class="stat-row"><span>Hiking this period</span><span style="font-family:var(--mono);color:${totHiking>0?'var(--health)':'var(--mute)'}">${totHiking>0?totHiking+' min':'--'}</span></div>`;
+    html += `<div class="stat-row"><span>Walking this period</span><span style="font-family:var(--mono);color:${totWalking>0?'var(--health)':'var(--mute)'}">${totWalking>0?totWalking+' min':'--'}</span></div>`;
+    html += `</div>`;
+  }
+
+  // ── STREAKS ──
+  html += sectionLabel('STREAKS','var(--health)');
+  const hB = computeHealthBests();
+  const streakItems=[
+    {key:'smokeFree',label:'Smoke-free',current:computeStreak(r=>r.health&&r.health.smokeFree===true)},
+    {key:'pushupsReps',label:'Push-ups',current:computeStreak(r=>r.health&&((r.health.pushupsReps||0)>0||r.health.pushups))},
+    {key:'abrollerReps',label:'Ab roller',current:computeStreak(r=>r.health&&((r.health.abrollerReps||0)>0||r.health.abroller))},
+    {key:'kegelReps',label:'Kegel',current:computeStreak(r=>r.health&&((r.health.kegelReps||0)>0||r.health.kegel))},
+    {key:'matroutineReps',label:'Mat routine',current:computeStreak(r=>r.health&&((r.health.matroutineReps||0)>0||r.health.matroutine))},
+    {key:'plankSeconds',label:'Plank',current:computeStreak(r=>r.health&&((r.health.plankSeconds||0)>0||r.health.plank))},
+  ];
+  html += `<div class="card">`;
+  html += `<div style="display:flex;padding:4px 0 6px;border-bottom:1px solid var(--sep-alt);font-family:var(--mono);font-size:8px;color:var(--mute)">`;
+  html += `<span style="flex:1"></span><span style="width:80px;text-align:right">Current</span><span style="width:80px;text-align:right">Best ever</span></div>`;
+  streakItems.forEach(({key,label,current})=>{
+    const best=hB[key]||0; const hasData=current>0||best>0;
+    html += `<div class="stat-row"><span style="font-size:11px">${label}</span><span style="display:flex">`;
+    html += `<span style="font-family:var(--mono);font-size:10px;width:80px;text-align:right;color:${current>0?'var(--health)':'var(--mute)'}">${hasData||current>0?current+' d':'--'}</span>`;
+    html += `<span style="font-family:var(--mono);font-size:10px;width:80px;text-align:right;color:${best>0?'var(--health)':'var(--mute)'}">${best>0?best+' d':'--'}</span>`;
+    html += `</span></div>`;
+  });
+  html += `</div>`;
+
+  s.innerHTML = html;
+  s.querySelector('#health-report-back').addEventListener('click',()=>{ healthReportOpen=false; renderHealth(); });
+  s.querySelectorAll('.health-period').forEach(btn=>{
+    btn.addEventListener('click',()=>{ healthReportPeriod=btn.dataset.period; renderHealthReport(s); });
+  });
+}
+
 /* ============ HEALTH ============ */
 function renderHealth(){
   const s = document.getElementById('s-health');
+  if(healthReportOpen){ renderHealthReport(s); return; }
   const h = day.health;
-  let html = compareDayHtml('health','var(--health)');
+  let html = `<div style="display:flex;justify-content:flex-end;margin-bottom:8px">`+
+    `<button class="btn-ghost" id="open-health-report" style="border-color:var(--health);color:var(--health);padding:6px 14px;font-size:12px">Report →</button>`+
+    `</div>`;
+  html += compareDayHtml('health','var(--health)');
   html += '<div class="card">'+fanGauge(healthScore(day))+'</div>';
   html += '<div class="grid4">';
   html += '<div class="card stat-mini">'+'<div class="v" style="color:var(--health)">'+(h.sleepHours||'--')+'h</div><div class="l">SLEEP</div></div>';
@@ -1565,9 +2366,16 @@ function renderHealth(){
   html += sectionLabel('MOVEMENT');
   html += '<div class="card">';
   const tennisVal=h.tennisMinutes||0;
-  html += '<div class="checkline" data-movement="tennis"><span style="flex:1">Tennis</span><span style="font-family:var(--mono);font-size:11px;color:'+(tennisVal>0?'var(--health)':'var(--mute)')+'">'+( tennisVal>0?tennisVal+' min':'--')+'</span></div>';
-  const runVal=h.runningKm||0;
-  html += '<div class="checkline" data-movement="running"><span style="flex:1">Running</span><span style="font-family:var(--mono);font-size:11px;color:'+(runVal>0?'var(--health)':'var(--mute)')+'">'+( runVal>0?runVal+' km':'--')+'</span></div>';
+  html += '<div class="checkline" data-movement="tennisMinutes"><span style="flex:1">Tennis</span><span style="font-family:var(--mono);font-size:11px;color:'+(tennisVal>0?'var(--health)':'var(--mute)')+'">'+( tennisVal>0?tennisVal+' min':'--')+'</span></div>';
+  const runKmVal=h.runningKm||0, runMinVal=h.runningMinutes||0;
+  html += '<div class="checkline"><span style="flex:1">Running</span>';
+  html += '<span data-movement="runningKm" style="font-family:var(--mono);font-size:11px;color:'+(runKmVal>0?'var(--health)':'var(--mute)')+';cursor:pointer;padding:0 6px">'+( runKmVal>0?runKmVal+' km':'-- km')+'</span>';
+  html += '<span data-movement="runningMinutes" style="font-family:var(--mono);font-size:11px;color:'+(runMinVal>0?'var(--health)':'var(--mute)')+';cursor:pointer;padding:0 6px">'+( runMinVal>0?runMinVal+' min':'-- min')+'</span>';
+  html += '</div>';
+  const hikeVal=h.hikingMinutes||0;
+  html += '<div class="checkline" data-movement="hikingMinutes"><span style="flex:1">Hiking</span><span style="font-family:var(--mono);font-size:11px;color:'+(hikeVal>0?'var(--health)':'var(--mute)')+'">'+( hikeVal>0?hikeVal+' min':'--')+'</span></div>';
+  const walkVal=h.walkingMinutes||0;
+  html += '<div class="checkline" data-movement="walkingMinutes"><span style="flex:1">Walking</span><span style="font-family:var(--mono);font-size:11px;color:'+(walkVal>0?'var(--health)':'var(--mute)')+'">'+( walkVal>0?walkVal+' min':'--')+'</span></div>';
   html += '</div>';
 
   html += sectionLabel('NOTES', 'var(--health)');
@@ -1641,6 +2449,7 @@ function renderHealth(){
     if(notesEl) h.notes=notesEl.value;
     saveDayNow();
   });
+  document.getElementById('open-health-report').addEventListener('click',()=>{ healthReportOpen=true; renderHealth(); });
   patchAriaRoles(s);
 }
 function yesNoRow(key, label, val){
@@ -1713,6 +2522,10 @@ function openTxModal(){
     if(type==='expense'){
       html += '<label style="font-family:var(--mono);font-size:9px;color:var(--mute)">CATEGORY</label>';
       html += '<div class="btn-group">'+cats.map(c=>'<button class="opt-btn tx-cat'+(c===category?' sel':'')+'" data-cat="'+c+'">'+c+'</button>').join('')+'</div>';
+      if(category==='Other'){
+        html += '<label style="font-family:var(--mono);font-size:9px;color:var(--mute)">DESCRIPTION (required)</label>';
+        html += '<input type="text" class="input" id="tx-note" placeholder="What was this for?">';
+      }
     }
     html += '<label style="font-family:var(--mono);font-size:9px;color:var(--mute)">AMOUNT</label><input type="number" class="input" id="tx-amt" placeholder="0">';
     html += '<div class="modal-actions"><button class="btn-cancel" id="tx-cancel">Cancel</button><button class="btn-primary" id="tx-save">Save</button></div>';
@@ -1723,10 +2536,74 @@ function openTxModal(){
     document.getElementById('tx-save').addEventListener('click', ()=>{
       const amount = parseFloat(document.getElementById('tx-amt').value);
       if(isNaN(amount) || amount<=0) return;
+      const noteEl = document.getElementById('tx-note');
+      const note = noteEl ? noteEl.value.trim() : '';
+      if(type==='expense' && category==='Other' && !note) return;
       const list = DB.transactions();
-      list.push({date:EDIT_DATE, type:type, amount:amount, category: type==='expense'?category:''});
+      const tx = {id:nextTxId(), date:EDIT_DATE, type:type, amount:amount, category: type==='expense'?category:''};
+      if(type==='expense' && category==='Other') tx.note = note;
+      list.push(tx);
       DB.saveTransactions(list);
       day.finance.logged = true;
+      closeModal();
+      renderFinance();
+    });
+  }
+  render();
+}
+
+function openEditTxModal(tx){
+  const cats = ['Rent','Food','Business costs','Transport','Weed','Cigarettes','Given to people','Home bills','Other'];
+  let type = tx.type, category = tx.category||cats[0], date = tx.date, editAmt = tx.amount;
+  let editNote = tx.note || '';
+  function syncAmt(){ const el=document.getElementById('edit-tx-amt'); if(el){ const v=parseFloat(el.value); if(!isNaN(v)&&v>0) editAmt=v; } }
+  function syncDate(){ const el=document.getElementById('edit-tx-date'); if(el&&el.value) date=el.value; }
+  function syncNote(){ const el=document.getElementById('edit-tx-note'); if(el) editNote=el.value; }
+  function render(){
+    let html = '<div class="modal-title">Edit transaction</div>';
+    html += '<label style="font-family:var(--mono);font-size:9px;color:var(--mute)">DATE</label>';
+    html += '<input type="date" class="input" id="edit-tx-date" value="'+date+'">';
+    html += '<label style="font-family:var(--mono);font-size:9px;color:var(--mute)">TYPE</label>';
+    html += '<div class="btn-group">'+['deposit','withdraw','income','expense'].map(t=>
+      '<button class="opt-btn edit-tx-type'+(t===type?' sel':'')+'" data-type="'+t+'">'+t.charAt(0).toUpperCase()+t.slice(1)+'</button>'
+    ).join('')+'</div>';
+    if(type==='expense'){
+      html += '<label style="font-family:var(--mono);font-size:9px;color:var(--mute)">CATEGORY</label>';
+      html += '<div class="btn-group">'+cats.map(c=>
+        '<button class="opt-btn edit-tx-cat'+(c===category?' sel':'')+'" data-cat="'+c+'">'+c+'</button>'
+      ).join('')+'</div>';
+      if(category==='Other'){
+        html += '<label style="font-family:var(--mono);font-size:9px;color:var(--mute)">DESCRIPTION (required)</label>';
+        html += '<input type="text" class="input" id="edit-tx-note" placeholder="What was this for?" value="'+editNote.replace(/"/g,'&quot;')+'">';
+      }
+    }
+    html += '<label style="font-family:var(--mono);font-size:9px;color:var(--mute)">AMOUNT</label>';
+    html += '<input type="number" class="input" id="edit-tx-amt" placeholder="0" value="'+editAmt+'">';
+    html += '<div class="modal-actions">';
+    html += '<button class="btn-cancel" id="edit-tx-del" style="color:var(--red)">Delete</button>';
+    html += '<button class="btn-cancel" id="edit-tx-cancel">Cancel</button>';
+    html += '<button class="btn-primary" id="edit-tx-save">Save</button>';
+    html += '</div>';
+    openModal(html);
+    document.getElementById('edit-tx-cancel').addEventListener('click', closeModal);
+    document.querySelectorAll('.edit-tx-type').forEach(b=>b.addEventListener('click', ()=>{ syncAmt(); syncDate(); syncNote(); type=b.dataset.type; render(); }));
+    document.querySelectorAll('.edit-tx-cat').forEach(b=>b.addEventListener('click', ()=>{ syncAmt(); syncNote(); category=b.dataset.cat; render(); }));
+    document.getElementById('edit-tx-save').addEventListener('click', ()=>{
+      syncDate(); syncAmt(); syncNote();
+      if(!date||editAmt<=0) return;
+      if(type==='expense' && category==='Other' && !editNote.trim()) return;
+      const list = DB.transactions();
+      const idx = list.findIndex(t=>t.id===tx.id);
+      if(idx===-1) return;
+      const updated = {id:tx.id, date, type, amount:editAmt, category:type==='expense'?category:''};
+      if(type==='expense' && category==='Other') updated.note = editNote.trim();
+      list[idx] = updated;
+      DB.saveTransactions(list);
+      closeModal();
+      renderFinance();
+    });
+    document.getElementById('edit-tx-del').addEventListener('click', ()=>{
+      DB.saveTransactions(DB.transactions().filter(t=>t.id!==tx.id));
       closeModal();
       renderFinance();
     });
@@ -1827,8 +2704,122 @@ function renderMusic(){
 }
 
 /* ============ FINANCE ============ */
+function renderFinanceReport(s){
+  const FIN_CATS=['Rent','Food','Business costs','Transport','Weed','Cigarettes','Given to people','Home bills','Other'];
+  const allTxs=DB.transactions();
+
+  // Period filter
+  let periodTxs;
+  if(financeReportPeriod==='today'){
+    periodTxs=allTxs.filter(t=>t.date===EDIT_DATE);
+  } else if(financeReportPeriod==='week'){
+    const d=new Date(EDIT_DATE);
+    const daysSinceMon=(d.getDay()+6)%7;
+    d.setDate(d.getDate()-daysSinceMon);
+    const weekStart=d.toISOString().slice(0,10);
+    periodTxs=allTxs.filter(t=>t.date>=weekStart&&t.date<=EDIT_DATE);
+  } else if(financeReportPeriod==='3week'){
+    const cut=new Date(EDIT_DATE);
+    cut.setDate(cut.getDate()-20);
+    const cutStr=cut.toISOString().slice(0,10);
+    periodTxs=allTxs.filter(t=>t.date>=cutStr&&t.date<=EDIT_DATE);
+  } else if(financeReportPeriod==='month'){
+    periodTxs=allTxs.filter(t=>t.date.startsWith(EDIT_DATE.slice(0,7)));
+  } else if(financeReportPeriod==='3month'){
+    const cut=new Date(EDIT_DATE);
+    cut.setMonth(cut.getMonth()-3);
+    const cutStr=cut.toISOString().slice(0,10);
+    periodTxs=allTxs.filter(t=>t.date>=cutStr);
+  } else {
+    periodTxs=allTxs;
+  }
+
+  const expTxs=periodTxs.filter(t=>t.type==='expense');
+  const total=expTxs.reduce((a,b)=>a+b.amount,0);
+
+  // Category totals, non-zero only, sorted by spend desc
+  const catData=FIN_CATS.map(name=>{
+    const amount=expTxs.filter(t=>t.category===name).reduce((a,b)=>a+b.amount,0);
+    const pct=total>0?Math.round(amount/total*100):0;
+    return {name,amount,pct,color:FIN_CAT_COLORS[name]};
+  }).filter(c=>c.amount>0).sort((a,b)=>b.amount-a.amount);
+
+  let html=
+    // Header row: back button + label
+    `<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">`+
+    `<button class="btn-ghost" id="report-back" style="border-color:var(--finance);color:var(--finance);padding:6px 14px;font-size:12px">← Back</button>`+
+    `<span style="font-family:var(--mono);font-size:9px;color:var(--mute);letter-spacing:0.05em">FINANCE REPORT</span>`+
+    `</div>`;
+
+  // Period selector — two rows
+  const row1=[['today','Today'],['week','This Week'],['3week','Last 3 Weeks']];
+  const row2=[['month','This Month'],['3month','Last 3 Months'],['all','All Time']];
+  html+=`<div class="btn-group" style="margin-bottom:6px">`;
+  row1.forEach(([key,label])=>{
+    html+=`<button class="opt-btn report-period${financeReportPeriod===key?' sel':''}" data-period="${key}">${label}</button>`;
+  });
+  html+=`</div>`;
+  html+=`<div class="btn-group" style="margin-bottom:14px">`;
+  row2.forEach(([key,label])=>{
+    html+=`<button class="opt-btn report-period${financeReportPeriod===key?' sel':''}" data-period="${key}">${label}</button>`;
+  });
+  html+=`</div>`;
+
+  // Pie breakdown
+  html+=sectionLabel('SPENDING BREAKDOWN','var(--finance)');
+  html+=`<div class="card">${financePieHtml(catData,total)}</div>`;
+
+  // Ranked categories
+  html+=sectionLabel('TOP SPENDING CATEGORIES','var(--finance)');
+  if(catData.length){
+    html+=`<div class="card">`;
+    catData.forEach(({name,amount,pct})=>{
+      html+=`<div class="stat-row"><span>${name}</span>`+
+        `<span style="display:flex;align-items:center;gap:8px">`+
+        `<span style="font-family:var(--mono);font-size:9px;color:var(--mute)">${pct}%</span>`+
+        `<span style="color:var(--finance);font-family:var(--mono)">${amount.toLocaleString()}</span>`+
+        `</span></div>`;
+    });
+    html+=`</div>`;
+  } else {
+    html+=`<div class="card" style="color:var(--mute);font-size:12px;text-align:center;padding:16px">No expenses for this period</div>`;
+  }
+
+  // Top 5 individual expenses
+  const top5=expTxs.slice().sort((a,b)=>b.amount-a.amount).slice(0,5);
+  html+=sectionLabel('BIGGEST INDIVIDUAL EXPENSES','var(--finance)');
+  if(top5.length){
+    html+=`<div class="card">`;
+    top5.forEach(t=>{
+      html+=`<div class="stat-row" style="gap:8px">`+
+        `<span style="font-family:var(--mono);font-size:10px;color:var(--mute);flex-shrink:0">${t.date}</span>`+
+        `<span style="font-size:12px;flex:1">${t.category==='Other'?(t.note||'Other'):t.category}</span>`+
+        `<span style="color:var(--finance);font-family:var(--mono);flex-shrink:0">${t.amount.toLocaleString()}</span>`+
+        `</div>`;
+    });
+    html+=`</div>`;
+  } else {
+    html+=`<div class="card" style="color:var(--mute);font-size:12px;text-align:center;padding:16px">No expenses for this period</div>`;
+  }
+
+  s.innerHTML=html;
+
+  s.querySelector('#report-back').addEventListener('click',()=>{
+    financeReportOpen=false;
+    renderFinance();
+  });
+  s.querySelectorAll('.report-period').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      financeReportPeriod=btn.dataset.period;
+      renderFinanceReport(s);
+    });
+  });
+}
+
 function renderFinance(){
   const s = document.getElementById('s-finance');
+  if(financeReportOpen){ renderFinanceReport(s); return; }
+
   const goals = DB.goals();
   const txs = DB.transactions();
   const monthPrefix = EDIT_DATE.slice(0,7);
@@ -1838,7 +2829,10 @@ function renderFinance(){
   const income = monthTx.filter(t=>t.type==='income'||t.type==='withdraw').reduce((a,b)=>a+b.amount,0);
   const expense = monthTx.filter(t=>t.type==='expense').reduce((a,b)=>a+b.amount,0);
 
-  let html = compareDayHtml('finance','var(--finance)');
+  let html = `<div style="display:flex;justify-content:flex-end;margin-bottom:8px">`+
+    `<button class="btn-ghost" id="open-report" style="border-color:var(--finance);color:var(--finance);padding:6px 14px;font-size:12px">Report →</button>`+
+    `</div>`;
+  html += compareDayHtml('finance','var(--finance)');
   html += '<div class="grid2">';
   html += '<div class="card stat-mini">'+'<div class="v" style="color:var(--finance);font-size:14px">'+deposited.toLocaleString()+'</div><div class="l">DEPOSITED</div></div>';
   html += '<div class="card stat-mini">'+'<div class="v" style="color:var(--finance);font-size:14px">'+withdrawn.toLocaleString()+'</div><div class="l">WITHDRAWN</div></div>';
@@ -1863,12 +2857,29 @@ function renderFinance(){
   html += sectionLabel('LOG A TRANSACTION');
   html += '<button class="btn-ghost" id="add-tx" style="border-color:var(--finance);color:var(--finance)">+ Log deposit, withdrawal, income, or expense</button>';
 
-  html += sectionLabel('SPENDING BREAKDOWN, THIS MONTH');
+  html += sectionLabel('SPENDING BREAKDOWN, TODAY');
   const cats = ['Rent','Food','Business costs','Transport','Weed','Cigarettes','Given to people','Home bills','Other'];
+  const todayTx = txs.filter(t=>t.date===EDIT_DATE);
   html += '<div class="card">'+cats.map(c=>{
-    const t = monthTx.filter(x=>x.type==='expense'&&x.category===c).reduce((a,b)=>a+b.amount,0);
-    return '<div class="stat-row"><span>'+c+'</span><span style="color:var(--finance);font-family:var(--mono)">'+(t?t.toLocaleString():'-')+'</span></div>';
+    const amt = todayTx.filter(x=>x.type==='expense'&&x.category===c).reduce((a,b)=>a+b.amount,0);
+    return '<div class="stat-row"><span>'+c+'</span><span style="color:var(--finance);font-family:var(--mono)">'+(amt?amt.toLocaleString():'-')+'</span></div>';
   }).join('')+'</div>';
+
+  html += sectionLabel('RECENT TRANSACTIONS', 'var(--finance)');
+  const recentTxs = txs.slice().sort((a,b)=>b.date.localeCompare(a.date)||(b.id-a.id)).slice(0,20);
+  if(recentTxs.length){
+    html += '<div class="card">'+recentTxs.map(t=>{
+      const label = t.type==='expense'?(t.category==='Other'?(t.note||'Other'):t.category):(t.type.charAt(0).toUpperCase()+t.type.slice(1));
+      return '<div class="stat-row tx-row" data-txid="'+t.id+'" style="cursor:pointer;gap:8px">'+
+        '<span style="font-family:var(--mono);font-size:10px;color:var(--mute);flex-shrink:0">'+t.date+'</span>'+
+        '<span style="font-size:12px;flex:1">'+label+'</span>'+
+        '<span style="color:var(--finance);font-family:var(--mono);flex-shrink:0">'+t.amount.toLocaleString()+'</span>'+
+        '<span style="color:var(--mute);font-size:10px;flex-shrink:0">&#x270E;</span>'+
+      '</div>';
+    }).join('')+'</div>';
+  } else {
+    html += '<div class="card" style="color:var(--mute);font-size:12px;text-align:center;padding:16px">No transactions logged yet</div>';
+  }
 
   html += sectionLabel('NOTES', 'var(--finance)');
   html += '<div class="card">'+'<textarea class="input textarea" id="finance-notes" placeholder="Notes for today">'+(day.finance.notes||'')+'</textarea></div>';
@@ -1884,7 +2895,18 @@ function renderFinance(){
   s.innerHTML = html;
   wireCmpArrows(s, 'finance', renderFinance);
 
+  document.getElementById('open-report').addEventListener('click',()=>{
+    financeReportOpen=true;
+    renderFinance();
+  });
   document.getElementById('add-tx').addEventListener('click', openTxModal);
+  s.querySelectorAll('.tx-row').forEach(row=>{
+    row.addEventListener('click', ()=>{
+      const id = parseInt(row.dataset.txid, 10);
+      const tx = DB.transactions().find(t=>t.id===id);
+      if(tx) openEditTxModal(tx);
+    });
+  });
   document.getElementById('save-finance').addEventListener('click', ()=>{
     const notesEl=document.getElementById('finance-notes');
     if(notesEl) day.finance.notes=notesEl.value;
@@ -2046,8 +3068,13 @@ function renderReview(){
   if(totalPlank>0) html += rr('Plank total', formatSeconds(totalPlank),'var(--health)');
   const totalTennis = hDays.reduce((a,d)=>a+(d.rec.health.tennisMinutes||0),0);
   const totalRunning = hDays.reduce((a,d)=>a+(Math.round((d.rec.health.runningKm||0)*10)/10),0);
+  const totalRunMin = hDays.reduce((a,d)=>a+(d.rec.health.runningMinutes||0),0);
+  const totalHiking = hDays.reduce((a,d)=>a+(d.rec.health.hikingMinutes||0),0);
+  const totalWalking = hDays.reduce((a,d)=>a+(d.rec.health.walkingMinutes||0),0);
   if(totalTennis>0) html += rr('Tennis', totalTennis+' min','var(--health)');
-  if(totalRunning>0) html += rr('Running', Math.round(totalRunning*10)/10+' km','var(--health)');
+  if(totalRunning>0||totalRunMin>0) html += rr('Running', (totalRunning>0?Math.round(totalRunning*10)/10+' km':'')+(totalRunning>0&&totalRunMin>0?' / ':'')+(totalRunMin>0?totalRunMin+' min':''),'var(--health)');
+  if(totalHiking>0) html += rr('Hiking', totalHiking+' min','var(--health)');
+  if(totalWalking>0) html += rr('Walking', totalWalking+' min','var(--health)');
   if(!hDays.length) html += '<div style="font-size:10px;color:var(--mute);padding:4px 0">No health data this week.</div>';
   html += '</div>';
 
@@ -2254,6 +3281,8 @@ function computeNeglectGaps(){
     {threshold:4,items:[
       {key:'tennisMinutes',label:'Tennis',fn:r=>H(r).tennisMinutes>0},
       {key:'runningKm',label:'Running',fn:r=>H(r).runningKm>0},
+      {key:'hikingMinutes',label:'Hiking',fn:r=>H(r).hikingMinutes>0},
+      {key:'walkingMinutes',label:'Walking',fn:r=>H(r).walkingMinutes>0},
       {key:'sessionLogged',label:'Music session',tab:'music',fn:r=>(r.music||{}).sessionLogged===true},
       {key:'tahajjud',label:'Tahajjud',tab:'faith',fn:r=>!!F(r).tahajjud},
       {key:'fasting',label:'Fasting',tab:'faith',fn:r=>!!F(r).fasting},
@@ -2540,6 +3569,7 @@ if('serviceWorker' in navigator){
 
 initTheme();
 function doInit(){
+  backfillTransactionIds();
   renderAll();
   animateCardsIn(document.getElementById('s-home'));
   renderFaithCountdown();
