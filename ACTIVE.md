@@ -974,6 +974,70 @@ for what's actually true today)
 
 ---
 
+## SESSION LOG — 2026-08-15/16, continued (bug fixes, public-template decision, Music Report full build + multi-session rework)
+
+### Two more real bugs found and fixed
+
+**Brushing bar stuck at 0/N.** Same class of bug as the earlier Water fix, but not automatically caught by it — the Health Report's Brushing "met" check still used a stale `>=2` full-credit threshold at line ~2128, so logging brushing once a day (the realistic case) never counted as "done." Root cause confirmed by comparison: the Review tab's own habit-consistency logic had already been written correctly with `>0` — only the newer Health Report copy had the bug. Fixed `>=2`→`>0`, relabeled "Brushing (×2)"→"Brushing (any)", same pattern as Water.
+
+**Pie leader lines unreadable where they crossed a similarly-colored slice.** All four pie functions (`fiveSliceDonutHtml`, `financePieHtml`, `timeBudgetPieHtml`, plus the dead unused `sleepDonutSvg`) colored their leader lines and label text to match each slice's own color — so a line crossing a same-hued region became invisible. Fixed by switching all leader-line strokes and label fills to `var(--text)` (always-readable neutral) — the legend's colored swatches already carry the color-to-category mapping, the line itself doesn't need to repeat it. Applied to all four functions, confirmed no shared code (four separate patches).
+
+### Deployment troubleshooting
+
+Push confirmed landed (commit `a42120b`, both `index.html` and `ACTIVE.md`, working tree clean). Phone showed stale design after one reload — confirmed via direct `web_fetch` of the live URL that GitHub Pages HAD deployed correctly (found "Back to Today" and the header logo in the fetched HTML); the delay was purely the phone's own service-worker cache. Resolved after a full uninstall/reinstall of the home-screen PWA.
+
+**playwright-mcp went missing mid-session** — Claude Code reported the tool unavailable despite having worked in prior sessions. Root cause found by reading the actual config directly: `CLAUDE BRAIN\.mcp.json` only had the `21st` connector; playwright had never been persisted at that scope. Re-added via `claude mcp add playwright npx @playwright/mcp@latest`, which correctly wrote to `Projects\LifeOS\.mcp.json` (the actual project-scope config, tied to CWD) rather than the parent folder. MCP servers only load at Claude Code session startup — reconnecting doesn't inject into an already-running session, so a fresh session restart was required before the tools became usable. Known housekeeping item: a duplicate/unused `playwright` entry was also manually added to the parent `CLAUDE BRAIN\.mcp.json` and was never cleaned up.
+
+### Major decision: LifeOS as a public template (deferred, not started)
+
+User's stated goal: eventually redesign a **copy** of LifeOS as something other people can use for their own life — genericized, not Davydenko-specific. Explicitly NOT the live personal app being touched for this — a separate fork/copy when the time comes.
+
+**Template vs. hosted product — resolved decisively in favor of template**, reasoning on record: (1) the entire app is already pure client-side localStorage with zero backend, so a template ships almost as-is, while a hosted product is a second project (accounts, database, server, security) that doesn't exist yet; (2) the data tracked (sexual health, drug use, exact finances, private faith practice) makes hosting other people's data a serious legal/moral responsibility a template entirely avoids — nobody's data ever touches infrastructure Davydenko controls; (3) a template ships in a realistic timeframe alongside everything else he runs, a hosted product doesn't.
+
+**Explicitly out of scope for this project right now, awaiting a future go-ahead signal from the user before any work starts:** forking the repo, stripping the "DAVYDENKO" identity, deciding which intimate/personal categories (Kegel, Knife Sharpening, Penile Massage, specific prayer tradition) become opt-in during a setup flow rather than shipped as defaults, and building an actual first-run onboarding experience. User was explicit: finish current work first, this gets its own dedicated session later.
+
+### Design pattern brainstorm — locked list, sourced from reference images across two sessions
+
+Repeated exercise of pulling real dashboard/infographic references and curating rather than copying wholesale — every accepted pattern was checked against whether it honestly fits data that actually exists in the app, same discipline as every chart decision this project has made. Two batches:
+
+**First locked batch (4 items):**
+1. Sparkline stat cards — big number paired with an inline mini-trend, applicable broadly (Music Studio Time stats, Finance totals, Health stats).
+2. Radar/spider chart — rejected for Home's 5 mismatched categories, re-scoped and approved specifically for comparing multiple items on **shared** axes (e.g. a category's own projects against each other).
+3. Calendar heatmap (GitHub-contributions style) — day-level consistency pattern, distinct from what a stacked bar or weekly-bar chart shows (reveals day-of-week tendencies and dry spells, not just totals).
+4. Pipeline funnel (Planned→Active→Done as narrowing bars) — direct upgrade to Music's existing 3-number pipeline stat, shows flow not just counts.
+
+**Explicitly rejected, with reasoning on record (do not re-litigate without new justification):** world maps/globes, team-avatar productivity lists, gantt-style projected-vs-actual timelines (no deadline data exists), generic icon-pictogram strips (redundant with existing pie/list patterns), scatter plots and sales funnels built for correlation/pipeline-value analysis (no matching data shape in a personal tracker), Venn/bubble-cluster diagrams and statistical-forecast bars (would need real new capabilities, not just a new chart skin), any multi-hue-per-widget or rank-based color spectrum (breaks the app's one-fixed-color-per-category identity), stacked-cube-layer visuals (specifically the aesthetic already retired from Home's old wireframe cube).
+
+**One thing worth remembering:** a subjective 1-5 quality/satisfaction rating (inspired by an "Employee Satisfaction" reference) was identified as a genuinely new field *type* the app had never had before (only Yes/No and numeric existed) — this became Music's session-quality field, see below, and is a candidate pattern for other categories later.
+
+### Music Report — built, then substantially expanded across the rest of the night
+
+**Base report (first build):** standard scaffolding (entry button, two-row period selector, Back) matching Finance/Faith. Investigation found day.music's data was structurally different from other categories — project status (Planned/Active/Done) lives independently in `lo_projects`, has no history, and cannot be period-filtered, unlike session data which lives in `lo_days`. Resolved by splitting the report into two clearly separately-labeled sections: "STUDIO TIME — [PERIOD]" (period-filtered: session count/total/avg minutes, weekly aggregate bars — deliberately NOT a line chart, since sessions are discrete sparse events like Finance transactions, not a guaranteed-daily value like sleep) and "PROJECT PIPELINE — CURRENT STATE" (always-current: Planned/Active/Done counts, Active projects with progress bars, plus a period-scoped "Worked This Period" sub-list). Rejected a Planned/Active/Done pie explicitly — pipeline stages aren't proportions, and small counts would look absurd as slices.
+
+**Round of enhancements (delta badges, status labels, session quality):** confirmed via a dedicated reference-image discussion. Added: compact up/down delta badges (`dBadge()`) on all three Studio Time stats comparing against the prior equivalent period, with noise guards (no badge on "All Time" — no valid prior period; no badge on a genuine zero-delta). Plain-language status labels on Active projects' progress bars ("Just started"/"In progress"/"Halfway there"/"Nearly done", bucketed by %). A new `day.music.sessionQuality` field (1-5, via reused `opt-btn` pills, tap-again-to-deselect) — deliberately does NOT affect `musicScore()`, stays a neutral/optional field. Average quality shown in the report, correctly excluding unrated sessions from the average rather than treating them as 0.
+
+**Heatmap + radar (from the locked design list):** "RECENT PATTERN — LAST 12 WEEKS" heatmap — deliberately on a FIXED 12-week window regardless of the period selector (a period-obedient heatmap would be either empty or an unreadably long grid), 4-tier intensity colored by minutes (not quality — quality is a new field, most historical sessions have none, coloring on it would make real history look empty). Radar ("PROJECT PROFILE" when 1 project shown / "PROJECT COMPARISON" at 2+, label switches automatically) — Active+Done projects only (Planned excluded, would just be a flat point at the origin), 4 axes (Progress/Sessions/Minutes/Quality) normalized to 0-100, explicitly flagged that Progress will always land on one of 5 fixed spokes (only 0/25/50/75/100 are selectable) since that's an honest data-shape fact, not a bug to hide.
+
+**Radar backed up with real numbers, then substantially expanded (9-item locked list, all shipped in Phase 5 — see below):** user felt the radar+legend alone was thin compared to how every other chart in the app pairs a visual with real numbers (Finance's pie has a full ranked list under it; this had only a color legend). Locked list, brainstormed explicitly before any prompt was written: (1) Recency as a 5th radar axis, normalized so MORE recent scores HIGHER/further out; (2) "Last worked" column in a new stat table; (3) show/hide toggles per project in the legend, to handle crowding past 4-5 projects; (4) a macro summary line — total sessions/minutes across ALL shown projects; (5) a stalled-project flag (3+ weeks untouched); (6) a sortable stat table (tap column header to re-sort); (7) a visual distinction for Done vs Active projects in the radar. Two further items surfaced separately and folded into the same rework: (8) Start/End work time entry, BOTH manual minutes AND automatic derivation available side by side (same UX precedent as Sleep's bedtime/waketime) — explains and justifies a genuine Music "Time Budget" donut, same proven multi-slice technique as Home/Finance/Health, since minutes become a real per-project summable unit; (9) support for MULTIPLE session logs per day (a real studio day can touch several different projects) — explicitly flagged upfront as a structural change comparable in size to the earlier TODAY/EDIT_DATE date-role split, not a small addition.
+
+### The multi-session data model rework — five phases, one honest process failure caught and corrected
+
+**Phase 0 (investigation only):** full inventory of every `day.music.*` reader — 16 call sites found (musicScore, Home's "Still Open Today", the heatmap, Day Detail popup, computeAllTimeBests, all of renderMusicReport's aggregations, renderMusic's main TODA Y UI and wave chart, compareDayHtml, and three Review-tab references). Confirmed real historical data was small and low-risk (~21 days, one session slot each). Proposed shape: `day.music = { sessions: [{workedOn, minutes, quality, startTime, endTime, minutesSource}], notes }` — notes deliberately stays day-level (day-scope reflections, not per-session annotations); `minutesSource` tie-break is manual-overrides-derived (same precedent as Health's running km vs. minutes); migration is a one-shot startup pass (not lazy per-read) gated by a `lo_music_v2` flag, so all 16 consumers can trust the new shape unconditionally once migrated.
+
+**Phase 1 (migration) — a real process failure, caught before real damage:** first reported as "complete and verified" based on manually-run browser-console commands, but a later investigation (prompted by the user wanting to resume properly with playwright-mcp) found the migration function had never actually been written into `index.html` — the `lo_music_v2` flag in localStorage was a leftover from the console workaround, not evidence the app itself did anything. Confirmed no real data was ever at risk (all real days had empty `music:{}`, nothing to lose), but the migration logic itself had never been proven against a real old-format record either. Redone properly: function written into source, confirmed via actual git diff, and tested against three manufactured cases (full session, zero-minutes session — the edge case most likely to be silently dropped — and no-session) plus a confirmed-idempotent second run. **Lesson on record: a "verified" report based on console commands or descriptions of expected behavior is not the same claim as verified-in-source — ask for the diff, not just the narrative, especially after any session gap or tooling interruption.**
+
+**Phase 2 (multi-session logging UI):** "Add another session" affordance, each entry with project select, manual minutes input AND start/end time pickers (Sleep's component pattern reused) that auto-derive minutes, quality pills. Verified with a real 2-session day: session 1 (derived, no override) kept its computed 90 minutes; session 2 (typed 100 over a derived 105) correctly took the manual value — proving the tie-break rule against real interaction, not just code review.
+
+**Phase 3 (updated all 9 remaining consumers)** to read/aggregate from `sessions[]` instead of flat fields — musicScore, the heatmap, Day Detail, compareDayHtml, "Still Open Today", computeAllTimeBests, all of renderMusicReport's stats, the Review tab's weekly Music block, and the streak/activity-rate helpers. Migration bumped to v3 in the same pass to also normalize never-logged `music:{}` days to carry an empty `sessions:[]`, so no consumer ever needs to special-case "no music key" vs "empty sessions array." Verified clean across all 10 real days post-migration (zero old-format remnants).
+
+**Phase 4 (Music Time Budget donut):** direct reuse of `timeBudgetPieHtml()`'s technique, per-project minute sums from `sessions[]`, placed between Studio Time and Recent Pattern. Same ≥2% label-suppression threshold as other pies; the whole section doesn't render at all if there's nothing to show.
+
+**Phase 5 (all 9 locked Project Comparison items) — shipped and interaction-verified, not just code-reviewed:** pentagon radar (5th Recency axis added), macro summary line, sortable table (sort handler actually clicked and confirmed to re-render with a real tie-break resolving correctly), Last Worked column, per-project legend toggles, stalled-project flag, Done-vs-Active visual distinction. Two items honestly flagged as code-correct-but-not-yet-visually-proven, since current real data doesn't trigger them: the Done/Active dashed-stroke distinction (no Done projects exist yet to render against) and the stalled-flag (currently reads "0 stalled," correct for now but never seen actually firing) — worth checking the first time either condition becomes real.
+
+This closes out every item queued for Music tonight. Growth remains the only category with an undecided Report view.
+
+---
+
 ## LIVE URL
 
 **https://davyduction-web.github.io/LifeOS** — confirmed working by
@@ -992,17 +1056,21 @@ for Add to Home Screen and any future sharing/testing.
 
 2. **Health "24-hour day" donut** — done. Shipped as the Health Report's "Time Budget" pie (Sleep + Tennis + Running + Hiking + Walking + Unaccounted), see 2026-08-15 continued session log.
 
-3. **Report views for Faith/Health/Music/Growth** — Finance, Faith, and Health all have one now. Music and Growth are still undecided — not yet discussed.
+3. **Report views for Faith/Health/Music/Growth** — Finance, Faith, Health, and Music all have one now. **Growth is the only category left undecided** — not yet discussed, pick up here next.
 
-4. **Tonight's changes (Faith Report, Faith perf fix, Health Report, Time Budget pie) need to be pushed to GitHub and deployed** — as of this log, user was heading to sleep before confirming the push landed. Verify next session that the live URL reflects tonight's work, and remind about the sw.js cache close-and-reopen requirement if anything looks stale on the phone.
+4. **Public-template redesign** — decided (template, not hosted) but explicitly not started. Awaiting the user's go-ahead before any forking/genericizing work begins. See the 2026-08-15/16 continued session log for the full reasoning and scope, and the locked design-pattern list (sparkline cards, radar, calendar heatmap, pipeline funnel) to draw from when it starts.
+
+5. **Two items in Music's Project Comparison are code-correct but not yet visually proven against real triggering conditions**: the Done-vs-Active radar distinction (no Done projects exist yet) and the stalled-project flag (currently 0, never seen firing). Worth a quick look the first time either condition becomes real.
+
+6. **Known cleanup, not urgent:** a stray unused `playwright` MCP entry sits in the parent `CLAUDE BRAIN\.mcp.json` — the one that actually matters is in `Projects\LifeOS\.mcp.json`.
 
 Everything else from every design conversation and every locked decision
-across the whole project history through 2026-08-15 is built and confirmed.
-See both 2026-08-15 session log entries above for everything built.
+across the whole project history through 2026-08-16 is built, deployed, and confirmed.
+See all three 2026-08-15/16 session log entries above for everything built.
 
 ---
 
-*Last updated: 2026-08-15 (late session — Faith Report, Faith performance fix, Health Report, Time Budget pie)*
+*Last updated: 2026-08-16 (Music Report full build + multi-session rework, public-template decision)*
 
 ---
 
