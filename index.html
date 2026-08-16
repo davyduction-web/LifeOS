@@ -209,7 +209,7 @@ button:active{transform:scale(0.96)}
 const DB = {
   day(dateStr){
     const all = JSON.parse(localStorage.getItem('lo_days')||'{}');
-    if(!all[dateStr]) all[dateStr] = {faith:{},health:{},music:{},finance:{},growth:{}};
+    if(!all[dateStr]) all[dateStr] = {faith:{},health:{},music:{sessions:[],notes:''},finance:{},growth:{}};
     return all[dateStr];
   },
   saveDay(dateStr, data){
@@ -253,8 +253,15 @@ let faithReportOpen = false;
 let faithReportPeriod = 'month';
 let healthReportOpen = false;
 let healthReportPeriod = 'month';
+let musicReportOpen = false;
+let musicReportPeriod = 'month';
 let calMonthOffset = 0;
 let swalatInterval = null;
+let musicDraftActive = false;
+let musicDraft = {};
+let musicRadarSort = 'mins';
+let musicRadarSortDir = -1;
+let musicRadarHidden = [];
 
 /* ============ SCORING ============ */
 const PRAYER_POINTS = {caught:20, delayed:5, notprayed:0, unset:0};
@@ -287,7 +294,7 @@ function growthScore(d){
   let c=0; GROWTH_ITEMS.forEach(k=>{ if(d.growth[k]) c++; });
   return Math.round((c/GROWTH_ITEMS.length)*100);
 }
-function musicScore(d){ return d.music.sessionLogged ? 100 : 0; }
+function musicScore(d){ return (d.music&&(d.music.sessions||[]).length>0) ? 100 : 0; }
 function financeScore(d){ return d.finance.logged ? 100 : 0; }
 function dayScore(d){
   return Math.round((faithScore(d)+healthScore(d)+musicScore(d)+financeScore(d)+growthScore(d))/5);
@@ -539,8 +546,8 @@ function sleepDonutSvg(totalHours, days, targetLow, targetHigh){
     const lx1=f2(rimx+nx*LEAD),ly1=f2(rimy+ny*LEAD);
     const tx=f2(rimx+nx*(LEAD+4)),ty=f2(rimy+ny*(LEAD+4)+3);
     const anchor=dx>=0?'start':'end';
-    svg+=`<line x1="${f2(rimx)}" y1="${f2(rimy)}" x2="${lx1}" y2="${ly1}" stroke="${color}" stroke-width="0.8" opacity="0.6"/>`;
-    svg+=`<text text-anchor="${anchor}" font-size="8" font-family="Space Mono,monospace" fill="${color}"><tspan x="${tx}" y="${ty}">${pct}%</tspan><tspan x="${tx}" dy="10">${amount}</tspan></text>`;
+    svg+=`<line x1="${f2(rimx)}" y1="${f2(rimy)}" x2="${lx1}" y2="${ly1}" stroke="var(--text)" stroke-width="0.8" opacity="0.6"/>`;
+    svg+=`<text text-anchor="${anchor}" font-size="8" font-family="Space Mono,monospace" fill="var(--text)"><tspan x="${tx}" y="${ty}">${pct}%</tspan><tspan x="${tx}" dy="10">${amount}</tspan></text>`;
   });
 
   svg+='</svg>';
@@ -723,8 +730,8 @@ function fiveSliceDonutHtml(scores){
     const tx=f2(rimx+nx*(LEAD+4)), ty=f2(rimy+ny*(LEAD+4)+3);
     const anchor=dx>=0?'start':'end';
     const name=k.charAt(0).toUpperCase()+k.slice(1);
-    svg+=`<line x1="${f2(rimx)}" y1="${f2(rimy)}" x2="${lx1}" y2="${ly1}" stroke="${c}" stroke-width="0.8" opacity="0.6"/>`;
-    svg+=`<text x="${tx}" y="${ty}" text-anchor="${anchor}" font-size="8" font-family="Space Mono,monospace" fill="${c}">${name} ${sc}</text>`;
+    svg+=`<line x1="${f2(rimx)}" y1="${f2(rimy)}" x2="${lx1}" y2="${ly1}" stroke="var(--text)" stroke-width="0.8" opacity="0.6"/>`;
+    svg+=`<text x="${tx}" y="${ty}" text-anchor="${anchor}" font-size="8" font-family="Space Mono,monospace" fill="var(--text)">${name} ${sc}</text>`;
   });
 
   svg+='</svg>';
@@ -817,8 +824,8 @@ function financePieHtml(catData, total){
     const lx1=f2(rimx+nx*LEAD),ly1=f2(rimy+ny*LEAD);
     const tx=f2(rimx+nx*(LEAD+4)),ty=f2(rimy+ny*(LEAD+4)+3);
     const anchor=dx>=0?'start':'end';
-    svg+=`<line x1="${f2(rimx)}" y1="${f2(rimy)}" x2="${lx1}" y2="${ly1}" stroke="${color}" stroke-width="0.8" opacity="0.6"/>`;
-    svg+=`<text text-anchor="${anchor}" font-size="8" font-family="Space Mono,monospace" fill="${color}"><tspan x="${tx}" y="${ty}">${pct}%</tspan><tspan x="${tx}" dy="10">${amount.toLocaleString()}</tspan></text>`;
+    svg+=`<line x1="${f2(rimx)}" y1="${f2(rimy)}" x2="${lx1}" y2="${ly1}" stroke="var(--text)" stroke-width="0.8" opacity="0.6"/>`;
+    svg+=`<text text-anchor="${anchor}" font-size="8" font-family="Space Mono,monospace" fill="var(--text)"><tspan x="${tx}" y="${ty}">${pct}%</tspan><tspan x="${tx}" dy="10">${amount.toLocaleString()}</tspan></text>`;
   });
 
   svg+='</svg>';
@@ -909,8 +916,8 @@ function timeBudgetPieHtml(catData, totalMins, sleepStat){
     const lx1=f2(rimx+nx*LEAD),ly1=f2(rimy+ny*LEAD);
     const tx=f2(rimx+nx*(LEAD+4)),ty=f2(rimy+ny*(LEAD+4)+3);
     const anchor=dx>=0?'start':'end';
-    svg+=`<line x1="${f2(rimx)}" y1="${f2(rimy)}" x2="${lx1}" y2="${ly1}" stroke="${color}" stroke-width="0.8" opacity="0.6"/>`;
-    svg+=`<text text-anchor="${anchor}" font-size="8" font-family="Space Mono,monospace" fill="${color}"><tspan x="${tx}" y="${ty}">${pct}%</tspan><tspan x="${tx}" dy="10">${fmtMin(mins)}</tspan></text>`;
+    svg+=`<line x1="${f2(rimx)}" y1="${f2(rimy)}" x2="${lx1}" y2="${ly1}" stroke="var(--text)" stroke-width="0.8" opacity="0.6"/>`;
+    svg+=`<text text-anchor="${anchor}" font-size="8" font-family="Space Mono,monospace" fill="var(--text)"><tspan x="${tx}" y="${ty}">${pct}%</tspan><tspan x="${tx}" dy="10">${fmtMin(mins)}</tspan></text>`;
   });
 
   svg+='</svg>';
@@ -927,6 +934,116 @@ function timeBudgetPieHtml(catData, totalMins, sleepStat){
   '</div>';
 
   return `<div style="padding:8px 0">${svg}${legend}${sleepStat}</div>`;
+}
+
+// Weekly aggregate bar chart for Music Report.
+// weeks = sorted array of Monday date strings; weekMap = {[monday]: {mins:number}}
+function musicWeekBarsSvg(weeks, weekMap){
+  const W=290,H=90,PL=4,PR=4,PT=8,PB=24;
+  const chartW=W-PL-PR, chartH=H-PT-PB;
+  const maxMins=Math.max(...weeks.map(wk=>weekMap[wk].mins),1);
+  const n=weeks.length;
+  const gap=3;
+  const barW=n===1?40:Math.max(6,(chartW-(n-1)*gap)/n);
+  const fmtM=m=>m>=60?Math.floor(m/60)+'h'+(m%60>0?Math.round(m%60)+'m':''):m+'m';
+  let svg=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px;height:auto;display:block;margin:0 auto">`;
+  weeks.forEach((wk,i)=>{
+    const mins=weekMap[wk].mins;
+    const x=n===1?(W-barW)/2:PL+i*(barW+gap);
+    const barH=mins>0?Math.max(3,Math.round(mins/maxMins*chartH)):2;
+    const y=PT+chartH-barH;
+    svg+=`<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${barH.toFixed(1)}" rx="2" fill="${mins>0?'var(--music)':'var(--track-bg)'}" opacity="${mins>0?'0.85':'0.3'}"/>`;
+    if(mins>0) svg+=`<text x="${(x+barW/2).toFixed(1)}" y="${(y-3).toFixed(1)}" text-anchor="middle" font-size="6.5" font-family="Space Mono,monospace" fill="var(--music)" opacity="0.9">${fmtM(mins)}</text>`;
+    const lbl=new Date(wk).toLocaleDateString('en-US',{month:'short',day:'numeric'});
+    svg+=`<text x="${(x+barW/2).toFixed(1)}" y="${(PT+chartH+14).toFixed(1)}" text-anchor="middle" font-size="6.5" font-family="Space Mono,monospace" fill="var(--mute)">${lbl}</text>`;
+  });
+  svg+=`</svg>`;
+  return svg;
+}
+
+function musicRadarSvg(radarProjs){
+  const W=275,H=230,cx=138,cy=112,R=70;
+  const TWO_PI=Math.PI*2;
+  const AXES=[
+    {label:'Progress', angle:-Math.PI/2},
+    {label:'Sessions', angle:-Math.PI/2+TWO_PI/5},
+    {label:'Minutes',  angle:-Math.PI/2+2*TWO_PI/5},
+    {label:'Quality',  angle:-Math.PI/2+3*TWO_PI/5},
+    {label:'Recency',  angle:-Math.PI/2+4*TWO_PI/5}
+  ];
+  const pt=(a,r)=>[cx+r*Math.cos(a),cy+r*Math.sin(a)];
+  const f=v=>v.toFixed(1);
+  const mkPath=pts=>pts.map(([x,y],i)=>(i?'L':'M')+f(x)+','+f(y)).join(' ')+'Z';
+  let svg=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px;height:auto;display:block;margin:0 auto">`;
+  [0.33,0.66,1].forEach(t=>{
+    const pts=AXES.map(a=>pt(a.angle,R*t));
+    svg+=`<path d="${mkPath(pts)}" fill="none" stroke="var(--sep-alt)" stroke-width="${t===1?1:0.7}" opacity="0.55"/>`;
+  });
+  AXES.forEach(a=>{
+    const [x,y]=pt(a.angle,R);
+    svg+=`<line x1="${f(cx)}" y1="${f(cy)}" x2="${f(x)}" y2="${f(y)}" stroke="var(--sep-alt)" stroke-width="0.7" opacity="0.45"/>`;
+  });
+  AXES.forEach(a=>{
+    const [x,y]=pt(a.angle,R+18);
+    const anchor=Math.cos(a.angle)>0.3?'start':Math.cos(a.angle)<-0.3?'end':'middle';
+    const dy=Math.sin(a.angle)>0.5?7:3;
+    svg+=`<text x="${f(x)}" y="${f(y+dy)}" text-anchor="${anchor}" font-size="7" font-family="Space Mono,monospace" fill="var(--mute)">${a.label}</text>`;
+  });
+  radarProjs.forEach(proj=>{
+    const vals=[proj.values.progress,proj.values.sessions,proj.values.minutes,proj.values.quality,proj.values.recency];
+    const pts=AXES.map((a,i)=>pt(a.angle,(vals[i]||0)/100*R));
+    const isDone=proj.status==='done';
+    if(isDone){
+      svg+=`<path d="${mkPath(pts)}" fill="${proj.color}" fill-opacity="0.07" stroke="${proj.color}" stroke-width="1.2" stroke-dasharray="4,2.5" stroke-linejoin="round" opacity="0.55"/>`;
+    } else {
+      svg+=`<path d="${mkPath(pts)}" fill="${proj.color}" fill-opacity="0.15" stroke="${proj.color}" stroke-width="1.5" stroke-linejoin="round"/>`;
+    }
+    pts.forEach(([x,y])=>svg+=`<circle cx="${f(x)}" cy="${f(y)}" r="${isDone?1.8:2.5}" fill="${proj.color}" opacity="${isDone?0.5:0.9}"/>`);
+  });
+  svg+=`</svg>`;
+  return svg;
+}
+
+function musicHeatmapSvg(all){
+  // Fixed 12-week lookback, Monday-start, ending on current edit-date week
+  const today=new Date(EDIT_DATE);
+  const startMonday=new Date(today);
+  startMonday.setDate(today.getDate()-((today.getDay()+6)%7)-77); // 11 full weeks back from this Monday
+  const CELL=13,GAP=2,LW=30,TH=16,ROWS=12,COLS=7;
+  const W=LW+(CELL+GAP)*COLS+GAP;
+  const H=TH+(CELL+GAP)*ROWS+GAP;
+  const DOW=['M','T','W','T','F','S','S'];
+  const f=v=>v.toFixed(1);
+  let svg=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:280px;height:auto;display:block;margin:0 auto">`;
+  // Day-of-week header
+  DOW.forEach((lbl,i)=>{
+    const x=LW+i*(CELL+GAP)+CELL/2;
+    svg+=`<text x="${f(x)}" y="11" text-anchor="middle" font-size="6.5" font-family="Space Mono,monospace" fill="var(--mute)">${lbl}</text>`;
+  });
+  for(let w=0;w<12;w++){
+    const wkMon=new Date(startMonday); wkMon.setDate(startMonday.getDate()+w*7);
+    const y=TH+w*(CELL+GAP);
+    const monLbl=wkMon.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+    svg+=`<text x="${f(LW-3)}" y="${f(y+CELL/2+2.5)}" text-anchor="end" font-size="6" font-family="Space Mono,monospace" fill="var(--mute)">${monLbl}</text>`;
+    for(let d=0;d<7;d++){
+      const dd=new Date(wkMon); dd.setDate(wkMon.getDate()+d);
+      const ds=dd.toISOString().slice(0,10);
+      const rec=all[ds];
+      const mussSess=(rec&&rec.music&&rec.music.sessions)||[];
+      const hasSession=mussSess.length>0;
+      const mins=hasSession?mussSess.reduce((a,s)=>a+(s.minutes||0),0):0;
+      const x=LW+d*(CELL+GAP);
+      // Base empty cell
+      svg+=`<rect x="${f(x)}" y="${f(y)}" width="${CELL}" height="${CELL}" rx="2.5" fill="var(--track-bg)" opacity="0.3"/>`;
+      // Session overlay (intensity by minutes)
+      if(hasSession){
+        const op=mins<=30?0.3:mins<=60?0.6:0.9;
+        svg+=`<rect x="${f(x)}" y="${f(y)}" width="${CELL}" height="${CELL}" rx="2.5" fill="var(--music)" opacity="${op}"/>`;
+      }
+    }
+  }
+  svg+=`</svg>`;
+  return svg;
 }
 
 function donutStat(pct, label, noteText, color){
@@ -1003,6 +1120,13 @@ function _wupdate(col,IT){
 function _wgetVal(col,items,IT){
   IT=IT||44;
   return items[Math.min(items.length-1,Math.max(0,Math.round(col.scrollTop/IT)))];
+}
+function deriveMinutes(start, end){
+  const [sh,sm]=start.split(':').map(Number);
+  const [eh,em]=end.split(':').map(Number);
+  let d=(eh*60+em)-(sh*60+sm);
+  if(d<0)d+=1440;
+  return d;
 }
 function openTimePickerModal(label, currentVal, onSet){
   const IT=44;
@@ -1157,15 +1281,18 @@ function openDayDetail(dateStr){
   html += '<div style="font-size:11px;color:var(--text);line-height:1.6">'+hLines.join('<br>')+'</div>';
 
   html += '<div style="font-family:var(--mono);font-size:9px;color:var(--music);letter-spacing:1px;margin:14px 0 6px">MUSIC</div>';
-  if(rec.music.sessionLogged){
-    let worked = rec.music.workedOn;
-    if(worked && worked!=='instrumentals'){
-      const p = DB.projects().find(x=>x.id===worked);
-      worked = p ? p.name : 'a project';
-    } else if(worked==='instrumentals'){
-      worked = 'Instrumentals';
-    }
-    html += '<div style="font-size:11px;color:var(--text)">Session logged'+(worked?' \u2014 '+worked:'')+'</div>';
+  const _mSessions=(rec.music&&rec.music.sessions)||[];
+  if(_mSessions.length){
+    _mSessions.forEach(ms=>{
+      let worked=ms.workedOn;
+      if(worked&&worked!=='instrumentals'){
+        const p=DB.projects().find(x=>x.id===worked);
+        worked=p?p.name:'a project';
+      } else if(worked==='instrumentals'){
+        worked='Instrumentals';
+      }
+      html += '<div style="font-size:11px;color:var(--text)">Session'+(worked?' \u2014 '+worked:'')+(ms.minutes?' ('+ms.minutes+' min)':'')+'</div>';
+    });
   } else {
     html += '<div style="font-size:11px;color:var(--mute)">No session logged</div>';
   }
@@ -1245,9 +1372,15 @@ function compareDayHtml(tab, color){
     const rm=refRec&&refRec.music?refRec.music:null;
     const tm=day.music;
     const pn=id=>{if(!id)return '--';if(id==='instrumentals')return 'Instru.';const p=DB.projects().find(x=>x.id===id);return p?p.name:'--';};
-    rows+=cmpRow('Session', rm?(rm.sessionLogged?'Yes':'No'):'--', tm.sessionLogged?'Yes':'No');
-    rows+=cmpRow('Project', rm?(rm.workedOn?pn(rm.workedOn):'--'):'--', tm.workedOn?pn(tm.workedOn):'--');
-    rows+=cmpRow('Duration', rm?((rm.sessionMinutes||0)>0?rm.sessionMinutes+' min':'--'):'--', (tm.sessionMinutes||0)>0?tm.sessionMinutes+' min':'--');
+    const rmSess=(rm&&rm.sessions)||[];
+    const tmSess=(tm&&tm.sessions)||[];
+    const rmTotal=rmSess.reduce((a,s)=>a+(s.minutes||0),0);
+    const tmTotal=tmSess.reduce((a,s)=>a+(s.minutes||0),0);
+    const rmProj=[...new Set(rmSess.map(s=>s.workedOn).filter(Boolean))].map(pn).join(', ')||'--';
+    const tmProj=[...new Set(tmSess.map(s=>s.workedOn).filter(Boolean))].map(pn).join(', ')||'--';
+    rows+=cmpRow('Sessions', rm?(rmSess.length+' session'+(rmSess.length!==1?'s':'')):'--', tmSess.length+' session'+(tmSess.length!==1?'s':''));
+    rows+=cmpRow('Projects', rm?rmProj:'--', tmProj);
+    rows+=cmpRow('Total time', rm?(rmTotal>0?rmTotal+' min':'--'):'--', tmTotal>0?tmTotal+' min':'--');
   }
 
   else if(tab==='finance'){
@@ -1526,7 +1659,7 @@ function renderHome(){
 
   html += sectionLabel('STILL OPEN TODAY');
   let open = [];
-  if(!todayRec.music.sessionLogged) open.push('Music session not logged');
+  if(!(todayRec.music.sessions&&todayRec.music.sessions.length>0)) open.push('Music session not logged');
   if(!todayRec.finance.logged) open.push('Finance not logged today');
   if(!Object.keys(todayRec.faith).length) open.push('Prayers not set today');
   html += '<div class="card">'+(open.length ? open.map(o=>'<div class="checkline"><span class="box">&#9633;</span>'+o+'</div>').join('') : '<div style="font-size:11px;color:var(--mute)">Everything logged for today.</div>')+'</div>';
@@ -2030,7 +2163,7 @@ function computeAllTimeBests(){
   });
   const b={fajrStreak:maxFajr,smokeStreak:maxSmoke,studioMins:0,pushupsReps:0,abrollerReps:0,kegelReps:0,matroutineReps:0,plankSeconds:0};
   Object.values(all).forEach(d=>{
-    if(d.music) b.studioMins=Math.max(b.studioMins,d.music.sessionMinutes||0);
+    if(d.music) b.studioMins=Math.max(b.studioMins,(d.music.sessions||[]).reduce((a,s)=>a+(s.minutes||0),0));
     if(d.health){
       const h=d.health;
       b.pushupsReps=Math.max(b.pushupsReps,h.pushupsReps||0);
@@ -2125,8 +2258,8 @@ function renderHealthReport(s){
     const cnt={};
     goodHabits.forEach(([k])=>{ cnt[k]=healthRecs.filter(r=>r.health[k]===true).length; });
     cnt.water_target = healthRecs.filter(r=>(r.health.water||0)>0).length;
-    cnt.brushing_target = healthRecs.filter(r=>(r.health.brushing||0)>=2).length;
-    const bars=[...goodHabits,['water_target','Water (any)'],['brushing_target','Brushing (×2)']];
+    cnt.brushing_target = healthRecs.filter(r=>(r.health.brushing||0)>0).length;
+    const bars=[...goodHabits,['water_target','Water (any)'],['brushing_target','Brushing (any)']];
     html += `<div class="card" style="padding:12px 14px">`;
     html += `<div style="display:flex;gap:12px;margin-bottom:10px;font-family:var(--mono);font-size:8px;color:var(--mute)">`;
     html += `<span style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:2px;background:var(--green);display:inline-block"></span>Done</span>`;
@@ -2611,15 +2744,361 @@ function openEditTxModal(tx){
   render();
 }
 
+/* ============ MUSIC REPORT ============ */
+function renderMusicReport(s){
+  const all=DB.allDays();
+  const allDates=Object.keys(all).sort();
+
+  let periodDates;
+  if(musicReportPeriod==='today'){
+    periodDates=allDates.filter(d=>d===EDIT_DATE);
+  } else if(musicReportPeriod==='week'){
+    const d=new Date(EDIT_DATE);
+    const daysSinceMon=(d.getDay()+6)%7;
+    d.setDate(d.getDate()-daysSinceMon);
+    const weekStart=d.toISOString().slice(0,10);
+    periodDates=allDates.filter(d=>d>=weekStart&&d<=EDIT_DATE);
+  } else if(musicReportPeriod==='3week'){
+    const cut=new Date(EDIT_DATE); cut.setDate(cut.getDate()-20);
+    const cutStr=cut.toISOString().slice(0,10);
+    periodDates=allDates.filter(d=>d>=cutStr&&d<=EDIT_DATE);
+  } else if(musicReportPeriod==='month'){
+    periodDates=allDates.filter(d=>d.startsWith(EDIT_DATE.slice(0,7)));
+  } else if(musicReportPeriod==='3month'){
+    const cut=new Date(EDIT_DATE); cut.setMonth(cut.getMonth()-3);
+    const cutStr=cut.toISOString().slice(0,10);
+    periodDates=allDates.filter(d=>d>=cutStr);
+  } else {
+    periodDates=allDates;
+  }
+
+  const periodRecs=periodDates.map(d=>all[d]).filter(Boolean);
+  const musicRecs=periodRecs.filter(r=>r.music);
+  const sessionRecs=musicRecs.filter(r=>(r.music.sessions||[]).length>0);
+  const sessionCount=sessionRecs.length;
+  const totalMins=sessionRecs.reduce((a,r)=>a+(r.music.sessions||[]).reduce((b,s)=>b+(s.minutes||0),0),0);
+  const avgMins=sessionCount>0&&totalMins>0?Math.round(totalMins/sessionCount):0;
+
+  const workedIds=sessionRecs.flatMap(r=>(r.music.sessions||[]).map(s=>s.workedOn).filter(w=>w&&w!=='instrumentals'));
+  const workedSet=[...new Set(workedIds)];
+  const instrDays=sessionRecs.filter(r=>(r.music.sessions||[]).some(s=>s.workedOn==='instrumentals')).length;
+  const projList=DB.projects();
+  const projBreakdown=workedSet.map(id=>({
+    name:(projList.find(p=>p.id===id)||{name:id}).name,
+    days:sessionRecs.filter(r=>(r.music.sessions||[]).some(s=>s.workedOn===id)).length
+  })).sort((a,b)=>b.days-a.days);
+
+  // Group period dates by Monday-start calendar week
+  function mondayOf(ds){ const d=new Date(ds); d.setDate(d.getDate()-((d.getDay()+6)%7)); return d.toISOString().slice(0,10); }
+  const weekMap={};
+  periodDates.forEach(ds=>{
+    const wk=mondayOf(ds);
+    if(!weekMap[wk]) weekMap[wk]={mins:0};
+    const rec=all[ds];
+    if(rec&&rec.music) weekMap[wk].mins+=(rec.music.sessions||[]).reduce((a,s)=>a+(s.minutes||0),0);
+  });
+  const weeks=Object.keys(weekMap).sort();
+
+  const fmtM=m=>m>=60?Math.floor(m/60)+'h'+(m%60>0?' '+Math.round(m%60)+'m':''):(m+'m');
+
+  // Quality stats — only sessions that have a rating set
+  const allRatings=sessionRecs.flatMap(r=>(r.music.sessions||[]).map(s=>s.quality).filter(q=>q!=null));
+  const avgQuality=allRatings.length>0?(allRatings.reduce((a,q)=>a+q,0)/allRatings.length):null;
+
+  // Pie data — time by project for selected period
+  const PIE_COLORS=['var(--amber)','var(--green)','var(--cyan)','var(--red)'];
+  const pieMap={};
+  let instrPieMins=0;
+  sessionRecs.forEach(r=>{
+    (r.music.sessions||[]).forEach(s=>{
+      if(s.workedOn==='instrumentals'){
+        instrPieMins+=(s.minutes||0);
+      } else if(s.workedOn){
+        if(!pieMap[s.workedOn]) pieMap[s.workedOn]=0;
+        pieMap[s.workedOn]+=(s.minutes||0);
+      }
+    });
+  });
+  const pieCats=[];
+  Object.entries(pieMap).sort((a,b)=>b[1]-a[1]).forEach(([id,mins],i)=>{
+    const name=(projList.find(p=>p.id===id)||{name:id}).name;
+    pieCats.push({name,mins,pct:0,color:PIE_COLORS[i%PIE_COLORS.length]});
+  });
+  if(instrPieMins>0) pieCats.push({name:'Instrumentals',mins:instrPieMins,pct:0,color:'var(--music)'});
+  const pieTotalMins=pieCats.reduce((a,c)=>a+c.mins,0);
+  pieCats.forEach(c=>{ c.pct=pieTotalMins>0?Math.round(c.mins/pieTotalMins*100):0; });
+
+  // Prior-period computation for delta badges
+  let priorDates=null;
+  if(musicReportPeriod==='today'){
+    const prev=new Date(EDIT_DATE); prev.setDate(prev.getDate()-1);
+    const prevStr=prev.toISOString().slice(0,10);
+    priorDates=allDates.filter(d=>d===prevStr);
+  } else if(musicReportPeriod==='week'){
+    const d=new Date(EDIT_DATE); d.setDate(d.getDate()-((d.getDay()+6)%7));
+    const pe=new Date(d); pe.setDate(pe.getDate()-1);
+    const ps=new Date(d); ps.setDate(ps.getDate()-7);
+    priorDates=allDates.filter(d=>d>=ps.toISOString().slice(0,10)&&d<=pe.toISOString().slice(0,10));
+  } else if(musicReportPeriod==='3week'){
+    const ts=new Date(EDIT_DATE); ts.setDate(ts.getDate()-20);
+    const pe=new Date(ts); pe.setDate(pe.getDate()-1);
+    const ps=new Date(pe); ps.setDate(ps.getDate()-20);
+    priorDates=allDates.filter(d=>d>=ps.toISOString().slice(0,10)&&d<=pe.toISOString().slice(0,10));
+  } else if(musicReportPeriod==='month'){
+    const d=new Date(EDIT_DATE.slice(0,7)+'-01'); d.setMonth(d.getMonth()-1);
+    const pm=d.toISOString().slice(0,7);
+    priorDates=allDates.filter(d=>d.startsWith(pm));
+  } else if(musicReportPeriod==='3month'){
+    const d=new Date(EDIT_DATE); d.setMonth(d.getMonth()-3);
+    const pe=new Date(d); pe.setDate(pe.getDate()-1);
+    const ps=new Date(pe); ps.setMonth(ps.getMonth()-3);
+    priorDates=allDates.filter(d=>d>=ps.toISOString().slice(0,10)&&d<=pe.toISOString().slice(0,10));
+  }
+  // 'all' → priorDates stays null → no badges shown
+
+  let priorCount=null,priorTotal=null,priorAvg=null;
+  if(priorDates!==null){
+    const pRecs=priorDates.map(d=>all[d]).filter(Boolean);
+    const pSess=pRecs.filter(r=>r.music&&(r.music.sessions||[]).length>0);
+    priorCount=pSess.length;
+    priorTotal=pSess.reduce((a,r)=>a+(r.music.sessions||[]).reduce((b,s)=>b+(s.minutes||0),0),0);
+    priorAvg=priorCount>0&&priorTotal>0?Math.round(priorTotal/priorCount):0;
+  }
+
+  // Delta badge: returns '' if no prior period, '' if both 0 (noise guard), '' if no change
+  function dBadge(curr,prev,fmt){
+    if(prev===null) return '';
+    if(curr===0&&prev===0) return '';
+    const delta=curr-prev;
+    if(delta===0) return '';
+    const up=delta>0;
+    const abs=Math.abs(delta);
+    const disp=fmt?fmt(abs):(abs+'');
+    return `<span class="delta-pill" style="background:${up?'var(--delta-up-bg)':'var(--delta-dn-bg)'};color:${up?'var(--green)':'var(--red)'};font-size:8px;padding:1px 5px;border-radius:6px;font-family:var(--mono);display:inline-block;margin-top:3px">${up?'+':'−'}${disp}</span>`;
+  }
+
+  const pLabel={'today':'TODAY','week':'THIS WEEK','3week':'LAST 3 WEEKS','month':'THIS MONTH','3month':'LAST 3 MONTHS','all':'ALL TIME'}[musicReportPeriod]||'ALL TIME';
+
+  // All-time per-project stats for radar (Active + Done only, not period-filtered)
+  const RADAR_COLORS=['var(--amber)','var(--green)','var(--cyan)','var(--red)'];
+  const radarRawProjs=DB.projects().filter(p=>p.status==='active'||p.status==='done');
+  const todayMs=new Date(EDIT_DATE).getTime();
+  const projStats=radarRawProjs.map((p,i)=>{
+    const pDateEntries=Object.entries(all).filter(([,rec])=>rec.music&&(rec.music.sessions||[]).some(s=>s.workedOn===p.id));
+    const pDays=pDateEntries.map(([,rec])=>rec);
+    const lastDate=pDateEntries.length>0?pDateEntries.map(([d])=>d).sort().reverse()[0]:null;
+    const daysSince=lastDate?Math.round((todayMs-new Date(lastDate).getTime())/86400000):null;
+    const recency=lastDate?Math.max(0,Math.round((1-daysSince/60)*100)):0;
+    const stalled=p.status==='active'&&daysSince!==null&&daysSince>14;
+    const pMins=pDays.reduce((a,d)=>a+(d.music.sessions||[]).filter(s=>s.workedOn===p.id).reduce((b,s)=>b+(s.minutes||0),0),0);
+    const allPRatings=pDays.flatMap(d=>(d.music.sessions||[]).filter(s=>s.workedOn===p.id).map(s=>s.quality).filter(q=>q!=null));
+    const pQual=allPRatings.length?allPRatings.reduce((a,q)=>a+q,0)/allPRatings.length:null;
+    return {id:p.id,name:p.name,status:p.status,progress:p.progress,sessions:pDays.length,minutes:pMins,quality:pQual,lastDate,daysSince,recency,stalled,color:RADAR_COLORS[i%4]};
+  });
+  const maxSess=Math.max(...projStats.map(p=>p.sessions),1);
+  const maxMins=Math.max(...projStats.map(p=>p.minutes),1);
+  const radarProjs=projStats.map(p=>({
+    id:p.id,name:p.name,status:p.status,color:p.color,
+    values:{
+      progress:p.progress,
+      sessions:Math.round(p.sessions/maxSess*100),
+      minutes:Math.round(p.minutes/maxMins*100),
+      quality:p.quality!==null?Math.round(p.quality*20):0,
+      recency:p.recency
+    }
+  }));
+
+  let html=
+    `<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">`+
+    `<button class="btn-ghost" id="music-report-back" style="border-color:var(--music);color:var(--music);padding:6px 14px;font-size:12px">← Back</button>`+
+    `<span style="font-family:var(--mono);font-size:9px;color:var(--mute);letter-spacing:0.05em">MUSIC REPORT</span>`+
+    `</div>`;
+
+  const row1=[['today','Today'],['week','This Week'],['3week','Last 3 Weeks']];
+  const row2=[['month','This Month'],['3month','Last 3 Months'],['all','All Time']];
+  html+=`<div class="btn-group" style="margin-bottom:6px">`;
+  row1.forEach(([key,label])=>{ html+=`<button class="opt-btn music-period${musicReportPeriod===key?' sel':''}" data-period="${key}">${label}</button>`; });
+  html+=`</div><div class="btn-group" style="margin-bottom:14px">`;
+  row2.forEach(([key,label])=>{ html+=`<button class="opt-btn music-period${musicReportPeriod===key?' sel':''}" data-period="${key}">${label}</button>`; });
+  html+=`</div>`;
+
+  // ── STUDIO TIME (PERIOD-SCOPED) ──
+  html+=sectionLabel(`STUDIO TIME — ${pLabel}`,'var(--music)');
+  if(weeks.length===0){
+    html+=`<div class="card" style="color:var(--mute);font-size:12px;text-align:center;padding:20px">No music data logged for this period</div>`;
+  } else {
+    html+=`<div class="card" style="padding:12px 14px">`;
+    html+=`<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--sep-alt)">`;
+    html+=`<div><div style="font-family:DM Serif Display,serif;font-size:22px;font-weight:700;color:var(--music)">${sessionCount}</div><div style="font-family:var(--mono);font-size:8px;color:var(--mute)">SESSIONS</div>${dBadge(sessionCount,priorCount)}</div>`;
+    html+=`<div><div style="font-family:DM Serif Display,serif;font-size:22px;font-weight:700;color:var(--music)">${totalMins>0?fmtM(totalMins):'--'}</div><div style="font-family:var(--mono);font-size:8px;color:var(--mute)">TOTAL</div>${dBadge(totalMins,priorTotal,fmtM)}</div>`;
+    html+=`<div><div style="font-family:DM Serif Display,serif;font-size:22px;font-weight:700;color:var(--music)">${avgMins>0?fmtM(avgMins):'--'}</div><div style="font-family:var(--mono);font-size:8px;color:var(--mute)">AVG SESSION</div>${dBadge(avgMins,priorAvg,fmtM)}</div>`;
+    html+=`</div>`;
+    html+=musicWeekBarsSvg(weeks,weekMap);
+    html+=`<div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;padding-top:8px;border-top:1px solid var(--sep-alt)">`;
+    html+=`<span style="font-family:var(--mono);font-size:8px;color:var(--mute)">AVG QUALITY</span>`;
+    html+=`<span style="font-family:DM Serif Display,serif;font-size:16px;font-weight:700;color:var(--music)">${avgQuality!==null?avgQuality.toFixed(1):'--'}<span style="font-size:10px;color:var(--mute)">/5</span></span>`;
+    html+=`</div>`;
+    html+=`</div>`;
+  }
+
+  // ── TIME BY PROJECT pie (period-scoped) ──
+  if(pieCats.length>0){
+    const pieStat=
+      `<div style="font-family:var(--mono);font-size:9px;color:var(--mute);text-align:center;letter-spacing:0.05em;margin-top:6px">TOTAL STUDIO TIME</div>`+
+      `<div style="font-family:DM Serif Display,serif;font-size:28px;font-weight:700;color:var(--music);text-align:center;line-height:1;margin-top:1px">${fmtM(pieTotalMins)}</div>`;
+    html+=sectionLabel(`TIME BY PROJECT — ${pLabel}`,'var(--music)');
+    html+=`<div class="card" style="padding:12px 14px">`;
+    html+=timeBudgetPieHtml(pieCats,pieTotalMins,pieStat);
+    html+=`</div>`;
+  }
+
+  // ── RECENT PATTERN heatmap (fixed 12-week, not period-filtered) ──
+  html+=sectionLabel('RECENT PATTERN — LAST 12 WEEKS','var(--music)');
+  html+=`<div class="card" style="padding:12px 14px">`;
+  html+=musicHeatmapSvg(all);
+  html+=`<div style="display:flex;justify-content:flex-end;align-items:center;gap:3px;margin-top:8px">`;
+  html+=`<span style="font-family:var(--mono);font-size:7px;color:var(--mute);margin-right:2px">Less</span>`;
+  html+=`<span style="width:10px;height:10px;border-radius:2px;display:inline-block;background:var(--track-bg);opacity:0.35"></span>`;
+  html+=`<span style="width:10px;height:10px;border-radius:2px;display:inline-block;background:var(--music);opacity:0.3"></span>`;
+  html+=`<span style="width:10px;height:10px;border-radius:2px;display:inline-block;background:var(--music);opacity:0.6"></span>`;
+  html+=`<span style="width:10px;height:10px;border-radius:2px;display:inline-block;background:var(--music);opacity:0.9"></span>`;
+  html+=`<span style="font-family:var(--mono);font-size:7px;color:var(--mute);margin-left:2px">More</span>`;
+  html+=`</div>`;
+  html+=`</div>`;
+
+  // ── PROJECT COMPARISON — radar + sortable table ──
+  if(radarProjs.length>0){
+    const radarLabel=radarProjs.length===1?'PROJECT PROFILE':'PROJECT COMPARISON';
+    const activeCount=projStats.filter(p=>p.status==='active').length;
+    const stalledCount=projStats.filter(p=>p.stalled).length;
+    const bestQ=projStats.filter(p=>p.quality!==null).sort((a,b)=>b.quality-a.quality)[0];
+    const macroStr=`${activeCount} active · ${stalledCount} stalled`+(bestQ?` · top quality: ${bestQ.name} ${bestQ.quality.toFixed(1)}/5`:'');
+    html+=sectionLabel(radarLabel,'var(--music)');
+    html+=`<div style="font-family:var(--mono);font-size:8px;color:var(--mute);margin-bottom:6px;padding:0 2px">${macroStr}</div>`;
+    html+=`<div class="card" style="padding:12px 14px">`;
+    const visibleRadar=radarProjs.filter(p=>!musicRadarHidden.includes(p.id));
+    html+=musicRadarSvg(visibleRadar.length?visibleRadar:radarProjs);
+    if(visibleRadar.length===0) html+=`<div style="text-align:center;font-family:var(--mono);font-size:8px;color:var(--mute);margin-top:-6px;margin-bottom:6px">all hidden — tap a dot to show</div>`;
+    html+=`<div style="height:8px"></div>`;
+    const SH=(col,lbl)=>{
+      const on=musicRadarSort===col;
+      const arrow=on?(musicRadarSortDir<0?'↓':'↑'):'↕';
+      return `<button data-radar-sort="${col}" style="background:none;border:none;padding:0;font-family:var(--mono);font-size:7px;color:${on?'var(--music)':'var(--mute)'};cursor:pointer;text-align:left;width:100%">${lbl} ${arrow}</button>`;
+    };
+    html+=`<div style="display:grid;grid-template-columns:1fr 36px 52px 36px 58px;gap:2px 4px;padding:4px 2px 4px 6px;border-bottom:1px solid var(--sep-alt)">`;
+    html+=SH('name','NAME')+SH('sessions','SESS')+SH('mins','TIME')+SH('quality','QUAL')+SH('last','LAST');
+    html+=`</div>`;
+    const sortedStats=[...projStats].sort((a,b)=>{
+      let va,vb;
+      if(musicRadarSort==='name'){va=a.name.toLowerCase();vb=b.name.toLowerCase();return musicRadarSortDir*(va>vb?1:va<vb?-1:0);}
+      else if(musicRadarSort==='sessions'){va=a.sessions;vb=b.sessions;}
+      else if(musicRadarSort==='mins'){va=a.minutes;vb=b.minutes;}
+      else if(musicRadarSort==='quality'){va=a.quality??-1;vb=b.quality??-1;}
+      else{va=a.recency;vb=b.recency;}
+      return musicRadarSortDir*(va-vb);
+    });
+    sortedStats.forEach(p=>{
+      const hidden=musicRadarHidden.includes(p.id);
+      const fmtLast=p.lastDate?new Date(p.lastDate).toLocaleDateString('en-US',{month:'short',day:'numeric'}):'--';
+      const stalledTag=p.stalled?`<span style="color:var(--amber);font-family:var(--mono);font-size:7px;margin-left:3px">⚠${p.daysSince}d</span>`:'';
+      const doneTag=p.status==='done'?`<span style="color:var(--green);font-family:var(--mono);font-size:7px;margin-left:3px">✓</span>`:'';
+      html+=`<div style="display:grid;grid-template-columns:1fr 36px 52px 36px 58px;gap:2px 4px;padding:5px 2px 5px 2px;border-bottom:1px solid var(--sep-alt);align-items:center;opacity:${hidden?0.35:1}">`;
+      html+=`<div style="display:flex;align-items:center;gap:5px;min-width:0">`;
+      html+=`<button data-radar-toggle="${p.id}" style="width:10px;height:10px;border-radius:2px;background:${p.color};border:none;cursor:pointer;flex-shrink:0;opacity:${hidden?0.25:0.85};padding:0"></button>`;
+      html+=`<span style="font-size:10px;font-family:var(--sans);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.name}</span>${stalledTag}${doneTag}`;
+      html+=`</div>`;
+      html+=`<span style="font-family:var(--mono);font-size:9px;color:var(--text);text-align:right">${p.sessions}</span>`;
+      html+=`<span style="font-family:var(--mono);font-size:9px;color:var(--text);text-align:right">${fmtM(p.minutes)}</span>`;
+      html+=`<span style="font-family:var(--mono);font-size:9px;color:${p.quality!==null?'var(--music)':'var(--mute)'};text-align:right">${p.quality!==null?p.quality.toFixed(1):'--'}</span>`;
+      html+=`<span style="font-family:var(--mono);font-size:8px;color:var(--mute);text-align:right">${fmtLast}</span>`;
+      html+=`</div>`;
+    });
+    html+=`</div>`;
+  }
+
+  // ── PROJECT PIPELINE — CURRENT STATE (not period-filtered) ──
+  const projects=DB.projects();
+  const planned=projects.filter(p=>p.status==='planned');
+  const active=projects.filter(p=>p.status==='active');
+  const done=projects.filter(p=>p.status==='done');
+
+  html+=sectionLabel('PROJECT PIPELINE — CURRENT STATE','var(--music)');
+  html+=`<div class="card" style="padding:12px 14px">`;
+
+  // Pipeline counts (three-stat row)
+  html+=`<div style="display:flex;justify-content:space-around;text-align:center;padding-bottom:10px;border-bottom:1px solid var(--sep-alt);margin-bottom:10px">`;
+  html+=`<div><div style="font-family:DM Serif Display,serif;font-size:24px;font-weight:700;color:var(--mute)">${planned.length}</div><div style="font-family:var(--mono);font-size:8px;color:var(--mute)">PLANNED</div></div>`;
+  html+=`<div><div style="font-family:DM Serif Display,serif;font-size:24px;font-weight:700;color:var(--music)">${active.length}</div><div style="font-family:var(--mono);font-size:8px;color:var(--mute)">ACTIVE</div></div>`;
+  html+=`<div><div style="font-family:DM Serif Display,serif;font-size:24px;font-weight:700;color:var(--green)">${done.length}</div><div style="font-family:var(--mono);font-size:8px;color:var(--mute)">DONE</div></div>`;
+  html+=`</div>`;
+
+  if(active.length){
+    html+=`<div style="font-family:var(--mono);font-size:8px;color:var(--mute);margin-bottom:6px">ACTIVE</div>`;
+    const projStatus=pct=>pct===0?'Just started':pct<=40?'In progress':pct<=79?'Halfway there':'Nearly done';
+    active.forEach(p=>{ html+=progressRow(p.name,p.progress,p.progress+'% · '+projStatus(p.progress),'var(--music)'); });
+    if(done.length) html+=`<div style="height:10px"></div>`;
+  }
+  if(done.length){
+    html+=`<div style="font-family:var(--mono);font-size:8px;color:var(--mute);margin-bottom:4px">DONE</div>`;
+    done.forEach(p=>{
+      html+=`<div style="display:flex;align-items:center;gap:6px;padding:3px 0;font-size:11px"><span style="color:var(--green)">&#9632;</span><span style="color:var(--mute)">${p.name}</span></div>`;
+    });
+  }
+  if(!planned.length&&!active.length&&!done.length){
+    html+=`<div style="font-size:11px;color:var(--mute);text-align:center;padding:8px 0">No projects yet</div>`;
+  }
+
+  // Period-scoped touches — within this card, clearly labeled
+  html+=`<div style="border-top:1px solid var(--sep-alt);margin-top:8px;padding-top:10px">`;
+  html+=`<div style="font-family:var(--mono);font-size:8px;color:var(--mute);margin-bottom:6px">WORKED THIS PERIOD</div>`;
+  if(workedSet.length===0&&instrDays===0){
+    html+=`<div style="font-size:11px;color:var(--mute)">No sessions this period</div>`;
+  } else {
+    projBreakdown.forEach((p,idx)=>{
+      const isLast=idx===projBreakdown.length-1&&instrDays===0;
+      html+=`<div style="display:flex;justify-content:space-between;padding:4px 0;${isLast?'':'border-bottom:1px solid var(--sep-alt);'}font-size:11px"><span>${p.name}</span><span style="font-family:var(--mono);color:var(--music)">${p.days} day${p.days!==1?'s':''}</span></div>`;
+    });
+    if(instrDays>0){
+      html+=`<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:11px"><span>Instrumentals</span><span style="font-family:var(--mono);color:var(--music)">${instrDays} day${instrDays!==1?'s':''}</span></div>`;
+    }
+  }
+  html+=`</div>`;
+  html+=`</div>`; // close pipeline card
+
+  s.innerHTML=html;
+  s.querySelector('#music-report-back').addEventListener('click',()=>{ musicReportOpen=false; renderMusic(); });
+  s.querySelectorAll('.music-period').forEach(btn=>{ btn.addEventListener('click',()=>{ musicReportPeriod=btn.dataset.period; renderMusicReport(s); }); });
+  s.querySelectorAll('[data-radar-sort]').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      const col=btn.dataset.radarSort;
+      if(musicRadarSort===col) musicRadarSortDir*=-1;
+      else{musicRadarSort=col;musicRadarSortDir=-1;}
+      renderMusicReport(s);
+    });
+  });
+  s.querySelectorAll('[data-radar-toggle]').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      const id=btn.dataset.radarToggle;
+      const idx=musicRadarHidden.indexOf(id);
+      if(idx>=0) musicRadarHidden.splice(idx,1); else musicRadarHidden.push(id);
+      renderMusicReport(s);
+    });
+  });
+}
+
 /* ============ MUSIC ============ */
 function renderMusic(){
   const s = document.getElementById('s-music');
+  if(musicReportOpen){ renderMusicReport(s); return; }
   const projects = DB.projects();
   const active = projects.filter(p=>p.status==='active');
   const planned = projects.filter(p=>p.status==='planned');
   const done = projects.filter(p=>p.status==='done');
 
-  let html = compareDayHtml('music','var(--music)');
+  let html = `<div style="display:flex;justify-content:flex-end;margin-bottom:8px">`+
+    `<button class="btn-ghost" id="open-music-report" style="border-color:var(--music);color:var(--music);padding:6px 14px;font-size:12px">Report →</button>`+
+    `</div>`;
+  html += compareDayHtml('music','var(--music)');
   html += sectionLabel('ACTIVE PROJECTS','var(--music)');
   html += '<button class="btn-ghost" id="add-project" style="border-color:var(--music);color:var(--music);margin-bottom:10px">+ Log or add project</button>';
   html += '<div class="grid2">';
@@ -2635,15 +3114,51 @@ function renderMusic(){
   html += sectionLabel('DONE / HISTORY');
   html += '<div class="card">'+(done.length ? done.map(p=>'<div class="checkline"><span class="box" style="color:var(--green)">&#9632;</span>'+p.name+'</div>').join('') : '<div style="font-size:11px;color:var(--mute)">Nothing finished yet.</div>')+'</div>';
 
-  html += sectionLabel('TODAY');
-  html += '<div class="card">'+
-    '<div class="checkline" data-toggle="sessionLogged"><span class="box" style="color:'+(day.music.sessionLogged?'var(--green)':'var(--mute)')+'">'+(day.music.sessionLogged?'&#9632;':'&#9633;')+'</span>Studio session today</div>';
-  if(day.music.sessionLogged){
-    html += '<label style="font-family:var(--mono);font-size:9px;color:var(--mute)">WORKED ON</label><select class="input" id="worked-on"><option value="">Select</option>';
-    active.forEach(p=>{ html += '<option value="'+p.id+'" '+(day.music.workedOn===p.id?'selected':'')+'>'+p.name+'</option>'; });
-    html += '<option value="instrumentals" '+(day.music.workedOn==='instrumentals'?'selected':'')+'>Instrumentals</option></select>';
-    html += '<label style="font-family:var(--mono);font-size:9px;color:var(--mute);margin-top:6px;display:block">SESSION LENGTH (MINUTES)</label>';
-    html += '<input type="number" class="input" id="session-mins" value="'+(day.music.sessionMinutes||'')+'" placeholder="How long" min="0">';
+  html += sectionLabel('TODAY','var(--music)');
+  const mussSess = day.music.sessions || [];
+  html += '<div class="card">';
+  if(mussSess.length){
+    mussSess.forEach((ms,msi)=>{
+      const allProjs = DB.projects();
+      const mpn = ms.workedOn==='instrumentals'?'Instrumentals':ms.workedOn?(allProjs.find(p=>p.id===ms.workedOn)||{}).name||ms.workedOn:'—';
+      const meta=[];
+      if(ms.minutes!=null) meta.push(ms.minutes+' min');
+      if(ms.quality!=null) meta.push('★'+ms.quality);
+      if(ms.startTime&&ms.endTime) meta.push(ms.startTime+' → '+ms.endTime);
+      html += '<div class="checkline" style="align-items:flex-start;gap:8px;padding:6px 0">'
+        +'<div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--text)">'+mpn+'</div>'
+        +(meta.length?'<div style="font-size:11px;color:var(--mute);margin-top:2px;font-family:var(--mono)">'+meta.join(' · ')+'</div>':'')
+        +'</div>'
+        +'<button data-del-sess="'+msi+'" style="background:none;border:none;color:var(--mute);font-size:20px;cursor:pointer;padding:0 2px;line-height:1" aria-label="Remove session">×</button>'
+        +'</div>';
+    });
+    html += '<div style="height:4px"></div>';
+  } else {
+    html += '<div style="font-size:11px;color:var(--mute);margin-bottom:8px">No sessions logged yet.</div>';
+  }
+  html += '<button class="btn-ghost" id="add-session-btn" style="border-color:var(--music);color:var(--music);width:100%;margin-top:2px">+ Add session</button>';
+  if(musicDraftActive){
+    const drvMins=(musicDraft.startTime&&musicDraft.endTime)?deriveMinutes(musicDraft.startTime,musicDraft.endTime):null;
+    const showMins=(musicDraft.minutesSource==='manual'&&musicDraft.minutes!=null)?musicDraft.minutes:(drvMins!=null?drvMins:(musicDraft.minutes!=null?musicDraft.minutes:''));
+    html += '<div style="border-top:1px solid var(--border);margin-top:12px;padding-top:12px">';
+    html += '<label style="font-family:var(--mono);font-size:9px;color:var(--mute)">WORKED ON</label>';
+    html += '<select class="input" id="draft-worked-on"><option value="">Select</option>';
+    active.forEach(p=>{ html += '<option value="'+p.id+'" '+(musicDraft.workedOn===p.id?'selected':'')+'>'+p.name+'</option>'; });
+    html += '<option value="instrumentals" '+(musicDraft.workedOn==='instrumentals'?'selected':'')+'>Instrumentals</option></select>';
+    html += '<label style="font-family:var(--mono);font-size:9px;color:var(--mute);margin-top:8px;display:block">TIME (OPTIONAL)</label>';
+    html += '<div style="display:flex;gap:8px;margin-top:4px">'
+      +'<button class="btn-ghost" id="draft-start" style="flex:1;font-family:var(--mono);font-size:12px;padding:8px">Start: '+(musicDraft.startTime||'--:--')+'</button>'
+      +'<button class="btn-ghost" id="draft-end" style="flex:1;font-family:var(--mono);font-size:12px;padding:8px">End: '+(musicDraft.endTime||'--:--')+'</button>'
+      +'</div>';
+    html += '<label style="font-family:var(--mono);font-size:9px;color:var(--mute);margin-top:8px;display:block">DURATION (MINUTES)</label>';
+    html += '<input type="number" class="input" id="draft-mins" value="'+showMins+'" placeholder="How long" min="0">';
+    html += '<label style="font-family:var(--mono);font-size:9px;color:var(--mute);margin-top:8px;display:block">QUALITY</label>';
+    html += '<div class="btn-group">'+[1,2,3,4,5].map(v=>'<button class="opt-btn sq-btn draft-sq'+(musicDraft.quality===v?' sel':'')+'" data-dsq="'+v+'">'+v+'</button>').join('')+'</div>';
+    html += '<div style="display:flex;gap:8px;margin-top:12px">'
+      +'<button class="btn-cancel" id="draft-cancel" style="flex:1;padding:10px;border-radius:16px;font-family:var(--sans);font-weight:700;font-size:13px">Cancel</button>'
+      +'<button class="btn-primary" id="draft-save" style="flex:1;padding:10px;border-radius:16px;font-family:var(--sans);font-weight:700;font-size:13px">Save Session</button>'
+      +'</div>';
+    html += '</div>';
   }
   html += '</div>';
 
@@ -2653,11 +3168,11 @@ function renderMusic(){
   const avg = monthAvg(musicScore, EDIT_DATE.slice(0,7));
   const allDaysMusic = DB.allDays();
   const monthPrefixMusic = EDIT_DATE.slice(0,7);
-  const instruCount = Object.keys(allDaysMusic).filter(k=>k.startsWith(monthPrefixMusic) && allDaysMusic[k].music && allDaysMusic[k].music.workedOn==='instrumentals').length;
+  const instruCount = Object.keys(allDaysMusic).filter(k=>k.startsWith(monthPrefixMusic) && allDaysMusic[k].music && (allDaysMusic[k].music.sessions||[]).some(s=>s.workedOn==='instrumentals')).length;
   html += '<div class="card">'+progressRow('Session logging rate', avg, avg+'%', 'var(--music)')+
     '<div style="display:flex;justify-content:space-between;padding-top:4px;font-size:11px;"><span>Instrumentals sessions</span><span style="font-family:var(--mono);color:var(--music)">'+instruCount+' this month</span></div></div>';
 
-  const wVals=[]; for(let i=6;i>=0;i--){ const dd=new Date(EDIT_DATE); dd.setDate(dd.getDate()-i); const ds=dd.toISOString().slice(0,10); let m=null; if(i===0){const v=day.music.sessionMinutes||0;if(v>0)m=v;}else if(allDaysMusic[ds]&&allDaysMusic[ds].music){const v=allDaysMusic[ds].music.sessionMinutes||0;if(v>0)m=v;} wVals.push(m); }
+  const wVals=[]; for(let i=6;i>=0;i--){ const dd=new Date(EDIT_DATE); dd.setDate(dd.getDate()-i); const ds=dd.toISOString().slice(0,10); let m=null; if(i===0){const v=(day.music.sessions||[]).reduce((a,s)=>a+(s.minutes||0),0);if(v>0)m=v;}else if(allDaysMusic[ds]&&allDaysMusic[ds].music){const v=(allDaysMusic[ds].music.sessions||[]).reduce((a,s)=>a+(s.minutes||0),0);if(v>0)m=v;} wVals.push(m); }
   const wChart=waveChartSvg(wVals,'var(--music)','var(--red)');
   if(wChart){ const wLbls=[]; for(let i=6;i>=0;i--){const dd=new Date(EDIT_DATE);dd.setDate(dd.getDate()-i);wLbls.push('<span>'+dd.toLocaleDateString('en-US',{weekday:'short'}).charAt(0)+'</span>');} html+=sectionLabel('STUDIO MINUTES — LAST 7 DAYS','var(--music)')+'<div class="card">'+wChart+'<div class="trend-labels">'+wLbls.join('')+'</div></div>'; }
 
@@ -2682,24 +3197,113 @@ function renderMusic(){
       renderMusic();
     });
   });
-  s.querySelectorAll('[data-toggle]').forEach(c=>{
-    c.addEventListener('click', ()=>{ day.music.sessionLogged=!day.music.sessionLogged; renderMusic(); });
+  // Session delete buttons
+  s.querySelectorAll('[data-del-sess]').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      const i=parseInt(btn.dataset.delSess);
+      if(!day.music.sessions) day.music.sessions=[];
+      day.music.sessions.splice(i,1);
+      renderMusic();
+    });
   });
-  document.getElementById('save-music').addEventListener('click', ()=>{
+  // Add session button
+  const addSessBtn=document.getElementById('add-session-btn');
+  if(addSessBtn) addSessBtn.addEventListener('click',()=>{
+    musicDraftActive=true;
+    musicDraft={workedOn:'',startTime:null,endTime:null,minutes:null,minutesSource:'unset',quality:null};
+    renderMusic();
+  });
+  // Draft form handlers
+  if(musicDraftActive){
+    const draftStartBtn=document.getElementById('draft-start');
+    const draftEndBtn=document.getElementById('draft-end');
+    const draftMinsEl=document.getElementById('draft-mins');
+    const syncDraftFromDom=()=>{
+      const woEl=document.getElementById('draft-worked-on');
+      if(woEl) musicDraft.workedOn=woEl.value;
+      const mEl=document.getElementById('draft-mins');
+      if(mEl&&mEl.value!==''){musicDraft.minutes=parseInt(mEl.value)||0;musicDraft.minutesSource='manual';}
+    };
+    if(draftStartBtn) draftStartBtn.addEventListener('click',()=>{
+      syncDraftFromDom();
+      openTimePickerModal('Start time',musicDraft.startTime||'07:00',v=>{
+        musicDraft.startTime=v;
+        if(musicDraft.startTime&&musicDraft.endTime&&musicDraft.minutesSource!=='manual'){
+          musicDraft.minutes=deriveMinutes(musicDraft.startTime,musicDraft.endTime);
+        }
+        renderMusic();
+      });
+    });
+    if(draftEndBtn) draftEndBtn.addEventListener('click',()=>{
+      syncDraftFromDom();
+      openTimePickerModal('End time',musicDraft.endTime||'09:00',v=>{
+        musicDraft.endTime=v;
+        if(musicDraft.startTime&&musicDraft.endTime&&musicDraft.minutesSource!=='manual'){
+          musicDraft.minutes=deriveMinutes(musicDraft.startTime,musicDraft.endTime);
+        }
+        renderMusic();
+      });
+    });
+    if(draftMinsEl) draftMinsEl.addEventListener('input',()=>{
+      musicDraft.minutesSource='manual';
+      musicDraft.minutes=draftMinsEl.value!==''?parseInt(draftMinsEl.value):null;
+    });
+    s.querySelectorAll('.draft-sq').forEach(btn=>{
+      btn.addEventListener('click',()=>{
+        const v=parseInt(btn.dataset.dsq);
+        musicDraft.quality=(musicDraft.quality===v)?null:v;
+        s.querySelectorAll('.draft-sq').forEach(b=>b.classList.toggle('sel',parseInt(b.dataset.dsq)===musicDraft.quality));
+      });
+    });
+    const draftCancelBtn=document.getElementById('draft-cancel');
+    if(draftCancelBtn) draftCancelBtn.addEventListener('click',()=>{ musicDraftActive=false; musicDraft={}; renderMusic(); });
+    const draftSaveBtn=document.getElementById('draft-save');
+    if(draftSaveBtn) draftSaveBtn.addEventListener('click',()=>{
+      const woEl=document.getElementById('draft-worked-on');
+      if(woEl) musicDraft.workedOn=woEl.value;
+      const mEl=document.getElementById('draft-mins');
+      if(mEl&&mEl.value!==''){
+        const typed=parseInt(mEl.value)||0;
+        musicDraft.minutes=typed;
+        if(musicDraft.startTime&&musicDraft.endTime){
+          musicDraft.minutesSource=(typed!==deriveMinutes(musicDraft.startTime,musicDraft.endTime))?'manual':'derived';
+        } else {
+          musicDraft.minutesSource='manual';
+        }
+      } else if(musicDraft.startTime&&musicDraft.endTime){
+        musicDraft.minutes=deriveMinutes(musicDraft.startTime,musicDraft.endTime);
+        musicDraft.minutesSource='derived';
+      }
+      if(!day.music.sessions) day.music.sessions=[];
+      day.music.sessions.push({
+        workedOn: musicDraft.workedOn||'',
+        minutes: musicDraft.minutes!=null?musicDraft.minutes:0,
+        quality: musicDraft.quality!=null?musicDraft.quality:null,
+        startTime: musicDraft.startTime||null,
+        endTime: musicDraft.endTime||null,
+        minutesSource: musicDraft.minutesSource||'manual'
+      });
+      musicDraftActive=false;
+      musicDraft={};
+      renderMusic();
+    });
+  }
+  // Save day
+  document.getElementById('save-music').addEventListener('click',()=>{
     const notesEl=document.getElementById('music-notes');
     if(notesEl) day.music.notes=notesEl.value;
-    const wo = document.getElementById('worked-on');
-    if(wo) day.music.workedOn = wo.value;
-    const minsEl = document.getElementById('session-mins');
-    if(minsEl) day.music.sessionMinutes = parseInt(minsEl.value)||0;
-    if(day.music.workedOn && day.music.workedOn!=='instrumentals'){
-      const list = DB.projects();
-      const p = list.find(x=>x.id===day.music.workedOn);
-      if(p) p.lastTouched = todayStr();
-      DB.saveProjects(list);
-    }
+    const list=DB.projects();
+    let changed=false;
+    (day.music.sessions||[]).forEach(ms=>{
+      if(ms.workedOn&&ms.workedOn!=='instrumentals'){
+        const p=list.find(x=>x.id===ms.workedOn);
+        if(p){p.lastTouched=EDIT_DATE;changed=true;}
+      }
+    });
+    if(changed) DB.saveProjects(list);
     saveDayNow();
   });
+  document.getElementById('open-music-report').addEventListener('click',()=>{ musicReportOpen=true; renderMusic(); });
   patchAriaRoles(s);
 }
 
@@ -3082,11 +3686,11 @@ function renderReview(){
   const mDays = wWithData.filter(d=>d.rec.music);
   html += sectionLabel('MUSIC THIS WEEK','var(--music)');
   html += '<div class="card">';
-  const sessionCount = mDays.filter(d=>d.rec.music.sessionLogged).length;
-  const totalMins = mDays.reduce((a,d)=>a+(d.rec.music.sessionMinutes||0),0);
-  const projIds = [...new Set(mDays.filter(d=>d.rec.music.workedOn&&d.rec.music.workedOn!=='instrumentals').map(d=>d.rec.music.workedOn))];
+  const sessionCount = mDays.filter(d=>(d.rec.music.sessions||[]).length>0).length;
+  const totalMins = mDays.reduce((a,d)=>a+(d.rec.music.sessions||[]).reduce((b,s)=>b+(s.minutes||0),0),0);
+  const projIds = [...new Set(mDays.flatMap(d=>(d.rec.music.sessions||[]).map(s=>s.workedOn).filter(w=>w&&w!=='instrumentals')))];
   const projNames = projIds.map(id=>{const p=DB.projects().find(x=>x.id===id);return p?p.name:id;});
-  const instrCount = mDays.filter(d=>d.rec.music.workedOn==='instrumentals').length;
+  const instrCount = mDays.filter(d=>(d.rec.music.sessions||[]).some(s=>s.workedOn==='instrumentals')).length;
   html += rr('Sessions', sessionCount+' days','var(--music)');
   html += rr('Total studio time', totalMins>0?totalMins+' min':'--','var(--music)');
   html += rr('Projects touched', projNames.length?projNames.join(', '):'--','var(--music)');
@@ -3171,7 +3775,7 @@ function renderReview(){
       GROWTH_ITEMS.forEach(k=>{ items.push({label:'Growth: '+gShortNa[k], rate:gDaysNa.filter(d=>d.rec.growth[k]).length/gDaysNa.length}); });
     }
     const mDaysNa = wWithData.filter(d=>d.rec.music);
-    if(mDaysNa.length) items.push({label:'Music: Studio session', rate:mDaysNa.filter(d=>d.rec.music.sessionLogged).length/mDaysNa.length});
+    if(mDaysNa.length) items.push({label:'Music: Studio session', rate:mDaysNa.filter(d=>(d.rec.music.sessions||[]).length>0).length/mDaysNa.length});
     const fDaysNaFin = wWithData.filter(d=>d.rec.finance);
     if(fDaysNaFin.length) items.push({label:'Finance: Log daily', rate:fDaysNaFin.filter(d=>d.rec.finance.logged).length/fDaysNaFin.length});
 
@@ -3203,7 +3807,7 @@ function renderReview(){
     });
   }
   if(mDays.length){
-    const wMaxStudio = mDays.reduce((a,d)=>Math.max(a,d.rec.music.sessionMinutes||0),0);
+    const wMaxStudio = mDays.reduce((a,d)=>Math.max(a,(d.rec.music.sessions||[]).reduce((b,s)=>b+(s.minutes||0),0)),0);
     if(wMaxStudio>0&&wMaxStudio>=bests.studioMins) weekRecords.push('Studio session: '+wMaxStudio+' min');
   }
   if(weekRecords.length){
@@ -3283,7 +3887,7 @@ function computeNeglectGaps(){
       {key:'runningKm',label:'Running',fn:r=>H(r).runningKm>0},
       {key:'hikingMinutes',label:'Hiking',fn:r=>H(r).hikingMinutes>0},
       {key:'walkingMinutes',label:'Walking',fn:r=>H(r).walkingMinutes>0},
-      {key:'sessionLogged',label:'Music session',tab:'music',fn:r=>(r.music||{}).sessionLogged===true},
+      {key:'sessionLogged',label:'Music session',tab:'music',fn:r=>((r.music||{}).sessions||[]).length>0},
       {key:'tahajjud',label:'Tahajjud',tab:'faith',fn:r=>!!F(r).tahajjud},
       {key:'fasting',label:'Fasting',tab:'faith',fn:r=>!!F(r).fasting},
       {key:'knifesharpening',label:'Knife sharpening',fn:r=>!!H(r).knifesharpening},
@@ -3568,7 +4172,36 @@ if('serviceWorker' in navigator){
 }
 
 initTheme();
+
+function migrateMusicSessions(){
+  if(localStorage.getItem('lo_music_v3')) return; // already migrated
+  const all = JSON.parse(localStorage.getItem('lo_days')||'{}');
+  let changed = false;
+  Object.keys(all).forEach(ds=>{
+    const m = all[ds].music;
+    if(!m) return;
+    if('sessionLogged' in m){ // old flat format → convert
+      const session = m.sessionLogged ? [{
+        workedOn: m.workedOn || '',
+        minutes: m.sessionMinutes || 0,
+        quality: (m.sessionQuality != null) ? m.sessionQuality : null,
+        startTime: null,
+        endTime: null,
+        minutesSource: 'manual'
+      }] : [];
+      all[ds].music = { sessions: session, notes: m.notes || '' };
+      changed = true;
+    } else if(!Array.isArray(m.sessions)){ // music:{} with no sessions array
+      all[ds].music = { sessions: [], notes: m.notes || '' };
+      changed = true;
+    }
+  });
+  if(changed) localStorage.setItem('lo_days', JSON.stringify(all));
+  localStorage.setItem('lo_music_v3','1');
+}
+
 function doInit(){
+  migrateMusicSessions();
   backfillTransactionIds();
   renderAll();
   animateCardsIn(document.getElementById('s-home'));
