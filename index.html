@@ -132,9 +132,10 @@ button:active{transform:scale(0.96)}
 .nb:active{transform:scale(0.96)}
 .btn-ghost,.opt-btn{box-shadow:var(--btn-depth)}
 .flame-wrap{width:40px;height:40px;margin:0 auto 6px;border-radius:50%;display:flex;align-items:center;justify-content:center}
-.fab{position:absolute;left:50%;top:-22px;transform:translateX(-50%);width:50px;height:50px;border-radius:50%;background:var(--cyan);border:3px solid var(--bg);display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:var(--fab-glow);transition:transform .12s ease}
+.fab{position:fixed;left:50%;bottom:calc(var(--nav) + 8px);transform:translateX(-50%);width:36px;height:36px;border-radius:50%;background:var(--cyan);border:2px solid var(--bg);display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:var(--fab-glow);transition:transform .12s ease}
+.fab::before{content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:44px;height:44px}
 .fab:active{transform:translateX(-50%) scale(0.96)}
-.fab svg{width:22px;height:22px;color:var(--on-accent);transition:transform .2s cubic-bezier(0.34,1.56,0.64,1)}
+.fab svg{width:14px;height:14px;color:var(--on-accent);transition:transform .2s cubic-bezier(0.34,1.56,0.64,1)}
 @media(hover:hover){.fab:hover svg{transform:translateX(1px) translateY(-1px) scale(1.1)}}
 .delta-pill{display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:3px 9px;border-radius:10px;font-family:var(--mono)}
 .trend-labels{display:flex;justify-content:space-between;font-family:var(--mono);font-size:8px;color:var(--mute);margin-top:4px}
@@ -209,7 +210,7 @@ button:active{transform:scale(0.96)}
 const DB = {
   day(dateStr){
     const all = JSON.parse(localStorage.getItem('lo_days')||'{}');
-    if(!all[dateStr]) all[dateStr] = {faith:{},health:{},music:{sessions:[],notes:''},finance:{},growth:{}};
+    if(!all[dateStr]) all[dateStr] = {faith:{},health:{},music:{sessions:[],notes:''},finance:{},growth:{},reading:{sessions:[],notes:''},meditation:{sessions:[],notes:''},mood:{entries:[]}};
     return all[dateStr];
   },
   saveDay(dateStr, data){
@@ -223,7 +224,9 @@ const DB = {
   transactions(){ return JSON.parse(localStorage.getItem('lo_transactions')||'[]'); },
   saveTransactions(t){ localStorage.setItem('lo_transactions', JSON.stringify(t)); },
   goals(){ return JSON.parse(localStorage.getItem('lo_goals')||'{"trading":0,"longrange":0,"savedSoFar":0,"tradingWithdrawn":0}'); },
-  saveGoals(g){ localStorage.setItem('lo_goals', JSON.stringify(g)); }
+  saveGoals(g){ localStorage.setItem('lo_goals', JSON.stringify(g)); },
+  books(){ return JSON.parse(localStorage.getItem('lo_books')||'[]'); },
+  saveBooks(b){ localStorage.setItem('lo_books', JSON.stringify(b)); }
 };
 
 function nextTxId(){
@@ -256,45 +259,92 @@ let healthReportPeriod = 'month';
 let musicReportOpen = false;
 let musicReportPeriod = 'month';
 let calMonthOffset = 0;
+let convPeriod = 'weekly';
 let swalatInterval = null;
 let musicDraftActive = false;
 let musicDraft = {};
 let musicRadarSort = 'mins';
+let readingDraftActive = false;
+let readingDraft = {};
+let meditationDraftActive = false;
+let meditationDraft = {};
+let moodDraftActive = false;
+let moodDraft = {};
+let growthReportOpen = false;
+let growthReportPeriod = 'month';
 let musicRadarSortDir = -1;
 let musicRadarHidden = [];
 
 /* ============ SCORING ============ */
-const PRAYER_POINTS = {caught:20, delayed:5, notprayed:0, unset:0};
+const PRAYER_POINTS = {caught:16, delayed:4, notprayed:0, unset:0};
 
 function faithScore(d){
   const prayers = ['fajr','dhuhr','asr','maghrib','isha'];
   let sum = 0;
   prayers.forEach(p=>{ sum += PRAYER_POINTS[d.faith[p]||'unset']; });
+  if(d.faith.tahajjud) sum += 10;
+  if(d.faith.gratitude) sum += 10;
   return sum;
 }
 const HEALTH_BOOL_GOOD = ['fruits','milk','stopstart','smokeFree','knifesharpening','penilemassage'];
 const HEALTH_BOOL_BAD = ['junk','weed','nailbiting'];
 function healthScore(d){
   const h = d.health;
-  let points = 0, max = 0;
-  HEALTH_BOOL_GOOD.forEach(k=>{ max++; if(h[k]) points++; });
-  HEALTH_BOOL_BAD.forEach(k=>{ max++; if(!h[k]) points++; });
-  max++; points += Math.min((h.water||0)/5, 1);
-  max++; points += Math.min((h.brushing||0)/2, 1);
-  ['pushupsReps','abrollerReps','kegelReps','matroutineReps'].forEach(k=>{ max++; if((h[k]||0)>0||h[k.replace('Reps','')]) points++; });
-  max++; if((h.plankSeconds||0)>0||h.plank) points++;
-  max++; if((h.tennisMinutes||0)>0||h.tennis) points++;
-  max++; if((h.runningKm||0)>0||h.running) points++;
-  max++; if((h.hikingMinutes||0)>0) points++;
-  max++; if((h.walkingMinutes||0)>0) points++;
-  return Math.round((points/max)*100);
+  // Bucket 1: Sleep (20 pts) — full at 7-9h, linear ramp below 7h, linear decay above 9h to 0 at 12h
+  const sh = h.sleepHours || 0;
+  let sleepPts;
+  if(sh >= 7 && sh <= 9)  sleepPts = 20;
+  else if(sh < 7)          sleepPts = (sh / 7) * 20;
+  else                      sleepPts = Math.max(0, (1 - (sh - 9) / 3)) * 20;
+  // Bucket 2: Habits & avoidances (25 pts, 9 items, 25/9 each — sum then round once)
+  const wt = 25 / 9;
+  let habitPts = 0;
+  HEALTH_BOOL_GOOD.forEach(k=>{ if(h[k]) habitPts += wt; });
+  HEALTH_BOOL_BAD.forEach(k=>{ if(!h[k]) habitPts += wt; });
+  // Bucket 3: Water + Brushing (5 pts each, proportional)
+  const waterPts = Math.min((h.water||0)/5, 1) * 5;
+  const brushPts = Math.min((h.brushing||0)/2, 1) * 5;
+  // Bucket 4: Exercise/movement (45 pts, 9 items, 5 pts each — sum then round once)
+  const exercisePts =
+    Math.min((h.pushupsReps||0)/30, 1) * 5 +
+    Math.min((h.abrollerReps||0)/15, 1) * 5 +
+    Math.min((h.kegelReps||0)/20, 1) * 5 +
+    Math.min((h.matroutineReps||0)/15, 1) * 5 +
+    Math.min((h.plankSeconds||0)/90, 1) * 5 +
+    Math.min((h.tennisMinutes||0)/45, 1) * 5 +
+    Math.min((h.runningKm||0)/3, 1) * 5 +
+    Math.min((h.hikingMinutes||0)/30, 1) * 5 +
+    Math.min((h.walkingMinutes||0)/30, 1) * 5;
+  return Math.round(sleepPts + habitPts + waterPts + brushPts + exercisePts);
 }
-const GROWTH_ITEMS = ['frame','eyecontact','posture','metacognition','impulse','delayedgrat','nameemotion','spokeup','initiated','fear','words','listening','rehearsal','strictself','strictothers'];
+const GROWTH_ITEMS = [
+  'eyecontact','posture','spokefirst','heldsilence','stayedconvo','approached','smiledstranger','heldground','normshrink','frame',
+  'noticedreaction','pausedbefore','nameemotion','impulse','letgo','calmunder','notpersonal','satwith',
+  'fear','initiated','askedwanted','tookrisk','hardercall','saidyes','confronted',
+  'setboundary','saidno','words','toldtruth','askedneeded','endedit',
+  'keptcommit','finishedit','nodistract','stucktoplan','didthing','delayedgrat','showedup','strictself',
+  'reachedout','listening','appreciated','repaired','fullattention','checkedin',
+  'learned','reflectedmistake','hardquestion','changedmind','tookfeedback','rehearsal',
+  'tookrespons','madedecision','spokegroup','tooklead','delegated','protectedtime'
+];
 function growthScore(d){
   let c=0; GROWTH_ITEMS.forEach(k=>{ if(d.growth[k]) c++; });
-  return Math.round((c/GROWTH_ITEMS.length)*100);
+  if(d.reading && (d.reading.sessions||[]).length > 0) c++;
+  if(d.meditation && (d.meditation.sessions||[]).length > 0) c++;
+  return Math.round((c/(GROWTH_ITEMS.length+2))*100);
 }
-function musicScore(d){ return (d.music&&(d.music.sessions||[]).length>0) ? 100 : 0; }
+function musicScore(d){
+  const sessions = (d.music&&d.music.sessions)||[];
+  if(!sessions.length) return 0;
+  const distinctProjects = new Set(sessions.map(s=>s.workedOn).filter(w=>w&&w!=='')).size;
+  const totalMinutes = sessions.reduce((a,s)=>a+(s.minutes||0),0);
+  const ratedSessions = sessions.filter(s=>s.quality!=null);
+  const avgQuality = ratedSessions.length ? ratedSessions.reduce((a,s)=>a+s.quality,0)/ratedSessions.length : 0;
+  const projectPts = Math.min(distinctProjects/3,1)*40;
+  const minutePts  = Math.min(totalMinutes/90,1)*40;
+  const qualityPts = (avgQuality/5)*20;
+  return Math.round(projectPts+minutePts+qualityPts);
+}
 function financeScore(d){ return d.finance.logged ? 100 : 0; }
 function dayScore(d){
   return Math.round((faithScore(d)+healthScore(d)+musicScore(d)+financeScore(d)+growthScore(d))/5);
@@ -961,6 +1011,88 @@ function musicWeekBarsSvg(weeks, weekMap){
   return svg;
 }
 
+function growthWeekBarsSvg(weeks, weekMap){
+  const W=290,H=90,PL=4,PR=4,PT=8,PB=24;
+  const chartW=W-PL-PR, chartH=H-PT-PB;
+  const maxScore=Math.max(...weeks.map(wk=>weekMap[wk].score),1);
+  const n=weeks.length;
+  const gap=3;
+  const barW=n===1?40:Math.max(6,(chartW-(n-1)*gap)/n);
+  let svg=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px;height:auto;display:block;margin:0 auto">`;
+  weeks.forEach((wk,i)=>{
+    const score=weekMap[wk].score;
+    const x=n===1?(W-barW)/2:PL+i*(barW+gap);
+    const barH=score>0?Math.max(3,Math.round(score/maxScore*chartH)):2;
+    const y=PT+chartH-barH;
+    svg+=`<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${barH.toFixed(1)}" rx="2" fill="${score>0?'var(--growth)':'var(--track-bg)'}" opacity="${score>0?'0.85':'0.3'}"/>`;
+    if(score>0) svg+=`<text x="${(x+barW/2).toFixed(1)}" y="${(y-3).toFixed(1)}" text-anchor="middle" font-size="6.5" font-family="Space Mono,monospace" fill="var(--growth)" opacity="0.9">${score}%</text>`;
+    const lbl=new Date(wk).toLocaleDateString('en-US',{month:'short',day:'numeric'});
+    svg+=`<text x="${(x+barW/2).toFixed(1)}" y="${(PT+chartH+14).toFixed(1)}" text-anchor="middle" font-size="6.5" font-family="Space Mono,monospace" fill="var(--mute)">${lbl}</text>`;
+  });
+  svg+=`</svg>`;
+  return svg;
+}
+
+function moodEnergyTrendSvg(moodDays){
+  const W=290,H=100,PL=4,PR=4,PT=14,PB=20;
+  const chartW=W-PL-PR,chartH=H-PT-PB;
+  const n=moodDays.length;
+  const xAt=i=>n===1?PL+chartW/2:PL+i*(chartW/(n-1));
+  const yAt=v=>PT+chartH-Math.round((v-1)/9*chartH);
+  let moodPts='',energyPts='';
+  moodDays.forEach((md,i)=>{
+    const x=xAt(i).toFixed(1),ym=yAt(md.avgMood).toFixed(1),ye=yAt(md.avgEnergy).toFixed(1);
+    moodPts+=(i===0?'M':'L')+x+','+ym+' ';
+    energyPts+=(i===0?'M':'L')+x+','+ye+' ';
+  });
+  const base=(PT+chartH).toFixed(1),x0=xAt(0).toFixed(1),xLast=xAt(n-1).toFixed(1);
+  const moodArea=moodPts+`L${xLast},${base} L${x0},${base} Z`;
+  const energyArea=energyPts+`L${xLast},${base} L${x0},${base} Z`;
+  const showIdxs=n<=5?moodDays.map((_,i)=>i):n<=12?[0,Math.floor(n/2),n-1]:[0,n-1];
+  let labels='';
+  showIdxs.forEach(i=>{
+    const anchor=i===0?'start':i===n-1?'end':'middle';
+    const lbl=new Date(moodDays[i].ds).toLocaleDateString('en-US',{month:'short',day:'numeric'});
+    labels+=`<text x="${xAt(i).toFixed(1)}" y="${H-3}" text-anchor="${anchor}" font-size="6.5" font-family="Space Mono,monospace" fill="var(--mute)">${lbl}</text>`;
+  });
+  let svg=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px;height:auto;display:block;margin:0 auto">`;
+  svg+=`<text x="4" y="9" font-size="6" font-family="Space Mono,monospace" fill="var(--growth)">■ MOOD</text>`;
+  svg+=`<text x="54" y="9" font-size="6" font-family="Space Mono,monospace" fill="var(--finance)">■ ENERGY</text>`;
+  svg+=`<path d="${moodArea}" fill="var(--growth)" opacity="0.12"/>`;
+  svg+=`<path d="${energyArea}" fill="var(--finance)" opacity="0.12"/>`;
+  svg+=`<path d="${moodPts.trim()}" fill="none" stroke="var(--growth)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>`;
+  svg+=`<path d="${energyPts.trim()}" fill="none" stroke="var(--finance)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>`;
+  svg+=labels;
+  svg+=`</svg>`;
+  return svg;
+}
+
+function dailyMinsBarSvg(dates, minsArr, color){
+  const W=290,H=80,PL=4,PR=4,PT=6,PB=20;
+  const chartW=W-PL-PR,chartH=H-PT-PB;
+  const n=dates.length;
+  const maxMins=Math.max(...minsArr,1);
+  const gap=n>20?1:2;
+  const barW=n===1?30:Math.max(2,(chartW-(n-1)*gap)/n);
+  let svg=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px;height:auto;display:block;margin:0 auto">`;
+  dates.forEach((ds,i)=>{
+    const mins=minsArr[i]||0;
+    const x=n===1?(W-barW)/2:PL+i*(barW+gap);
+    const barH=mins>0?Math.max(3,Math.round(mins/maxMins*chartH)):2;
+    const y=PT+chartH-barH;
+    svg+=`<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${barH.toFixed(1)}" rx="1" fill="${mins>0?color:'var(--track-bg)'}" opacity="${mins>0?'0.85':'0.3'}"/>`;
+  });
+  const labelIdxs=n<=5?dates.map((_,i)=>i):n<=10?[0,Math.floor(n/2),n-1]:[0,n-1];
+  labelIdxs.forEach(i=>{
+    const xc=n===1?(W-barW)/2+barW/2:PL+i*(barW+gap)+barW/2;
+    const anchor=i===0?'start':i===n-1?'end':'middle';
+    const lbl=new Date(dates[i]).toLocaleDateString('en-US',{month:'short',day:'numeric'});
+    svg+=`<text x="${xc.toFixed(1)}" y="${H-3}" text-anchor="${anchor}" font-size="6.5" font-family="Space Mono,monospace" fill="var(--mute)">${lbl}</text>`;
+  });
+  svg+=`</svg>`;
+  return svg;
+}
+
 function musicRadarSvg(radarProjs){
   const W=275,H=230,cx=138,cy=112,R=70;
   const TWO_PI=Math.PI*2;
@@ -1000,6 +1132,42 @@ function musicRadarSvg(radarProjs){
     }
     pts.forEach(([x,y])=>svg+=`<circle cx="${f(x)}" cy="${f(y)}" r="${isDone?1.8:2.5}" fill="${proj.color}" opacity="${isDone?0.5:0.9}"/>`);
   });
+  svg+=`</svg>`;
+  return svg;
+}
+
+function weekRadarSvg(fAvg,hAvg,mAvg,fiAvg,gAvg){
+  const W=275,H=230,cx=138,cy=112,R=70;
+  const TWO_PI=Math.PI*2;
+  const AXES=[
+    {label:'Faith',   angle:-Math.PI/2,            color:'var(--faith)'},
+    {label:'Health',  angle:-Math.PI/2+TWO_PI/5,   color:'var(--health)'},
+    {label:'Music',   angle:-Math.PI/2+2*TWO_PI/5, color:'var(--music)'},
+    {label:'Finance', angle:-Math.PI/2+3*TWO_PI/5, color:'var(--finance)'},
+    {label:'Growth',  angle:-Math.PI/2+4*TWO_PI/5, color:'var(--growth)'}
+  ];
+  const vals=[fAvg||0,hAvg||0,mAvg||0,fiAvg||0,gAvg||0];
+  const pt=(a,r)=>[cx+r*Math.cos(a),cy+r*Math.sin(a)];
+  const f=v=>v.toFixed(1);
+  const mkPath=pts=>pts.map(([x,y],i)=>(i?'L':'M')+f(x)+','+f(y)).join(' ')+'Z';
+  let svg=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px;height:auto;display:block;margin:0 auto">`;
+  [0.33,0.66,1].forEach(t=>{
+    const pts=AXES.map(a=>pt(a.angle,R*t));
+    svg+=`<path d="${mkPath(pts)}" fill="none" stroke="var(--sep-alt)" stroke-width="${t===1?1:0.7}" opacity="0.55"/>`;
+  });
+  AXES.forEach(a=>{
+    const [x,y]=pt(a.angle,R);
+    svg+=`<line x1="${f(cx)}" y1="${f(cy)}" x2="${f(x)}" y2="${f(y)}" stroke="var(--sep-alt)" stroke-width="0.7" opacity="0.45"/>`;
+  });
+  AXES.forEach(a=>{
+    const [x,y]=pt(a.angle,R+18);
+    const anchor=Math.cos(a.angle)>0.3?'start':Math.cos(a.angle)<-0.3?'end':'middle';
+    const dy=Math.sin(a.angle)>0.5?7:3;
+    svg+=`<text x="${f(x)}" y="${f(y+dy)}" text-anchor="${anchor}" font-size="7" font-family="Space Mono,monospace" fill="${a.color}">${a.label}</text>`;
+  });
+  const pts=AXES.map((a,i)=>pt(a.angle,vals[i]/100*R));
+  svg+=`<path d="${mkPath(pts)}" fill="var(--home)" fill-opacity="0.15" stroke="var(--home)" stroke-width="1.5" stroke-linejoin="round"/>`;
+  pts.forEach(([x,y])=>svg+=`<circle cx="${f(x)}" cy="${f(y)}" r="2.5" fill="var(--home)" opacity="0.9"/>`);
   svg+=`</svg>`;
   return svg;
 }
@@ -1053,20 +1221,66 @@ function donutStat(pct, label, noteText, color){
     '<div style="font-family:var(--mono);font-size:8px;color:var(--mute);margin-top:2px">'+label+'</div>'+
     '</div>';
 }
-function triCircleHtml(count, label){
+function convergenceClusterHtml(convCount, loggedCount, hitRates){
   const isLight=document.documentElement.dataset.theme==='light';
-  const alpha=0.2;
-  const glow=isLight?'':'filter:drop-shadow(0 0 5px var(--faith))';
-  let svg='<svg width="100" height="90" viewBox="0 0 100 90">';
-  svg+='<g'+(glow?' style="'+glow+'"':'')+'>';
-  svg+='<circle cx="50" cy="30" r="25" fill="var(--faith)" fill-opacity="'+alpha+'"/>';
-  svg+='<circle cx="33" cy="58" r="25" fill="var(--health)" fill-opacity="'+alpha+'"/>';
-  svg+='<circle cx="67" cy="58" r="25" fill="var(--music)" fill-opacity="'+alpha+'"/>';
-  svg+='</g>';
-  svg+='<text x="50" y="58" text-anchor="middle" font-size="20" font-weight="700" fill="var(--text)" font-family="DM Serif Display,serif">'+count+'</text>';
-  svg+='<text x="50" y="78" text-anchor="middle" font-size="7" fill="var(--mute)" font-family="Space Mono,monospace">'+label+'</text>';
+  const W=220,H=215,cx=110,cy=100;
+  const d=20, rMin=13, rSpan=16; // radius: 13 (0%) → 29 (100%)
+  const labelR=68;               // center → label anchor
+  const f2=n=>n.toFixed(2);
+  const cats=[
+    {color:'var(--faith)',   name:'FAITH'},
+    {color:'var(--health)',  name:'HEALTH'},
+    {color:'var(--music)',   name:'MUSIC'},
+    {color:'var(--finance)', name:'FINANCE'},
+    {color:'var(--growth)',  name:'GROWTH'},
+  ];
+  const thetas=cats.map((_,i)=>-Math.PI/2+i*2*Math.PI/5);
+  const radii=hitRates.map(h=>rMin+h*rSpan);
+
+  let svg='<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;max-width:'+W+'px;height:auto;display:block;margin:0 auto">';
+
+  // 1. Circles — translucent, sized by hit-rate, per-color glow
+  cats.forEach((c,i)=>{
+    const θ=thetas[i];
+    const r=radii[i];
+    const ccx=(cx+d*Math.cos(θ)).toFixed(2);
+    const ccy=(cy+d*Math.sin(θ)).toFixed(2);
+    const glw=isLight?'':' style="filter:drop-shadow(0 0 6px '+c.color+')"';
+    svg+='<circle cx="'+ccx+'" cy="'+ccy+'" r="'+f2(r)+'" fill="'+c.color+'" fill-opacity="0.22"'+glw+'/>';
+  });
+
+  // 2. Backing ellipse for center legibility
+  svg+='<ellipse cx="'+cx+'" cy="'+cy+'" rx="13" ry="10" fill="var(--card-bg)" fill-opacity="0.88"/>';
+
+  // 3. Center count
+  svg+='<text x="'+cx+'" y="'+(cy+6)+'" text-anchor="middle" font-size="18" font-weight="700" fill="var(--text)" font-family="DM Serif Display,serif">'+convCount+'</text>';
+
+  // 4. Connector lines + two-line labels (name above, percentage below)
+  cats.forEach((c,i)=>{
+    const θ=thetas[i];
+    const r=radii[i];
+    const pct=Math.round(hitRates[i]*100);
+    const ex=cx+(d+r)*Math.cos(θ);
+    const ey=cy+(d+r)*Math.sin(θ);
+    const lx=cx+labelR*Math.cos(θ);
+    const ly=cy+labelR*Math.sin(θ);
+    const lineEndX=cx+(labelR-15)*Math.cos(θ);
+    const lineEndY=cy+(labelR-15)*Math.sin(θ);
+    if((labelR-15)-(d+r)>2){
+      svg+='<line x1="'+f2(ex)+'" y1="'+f2(ey)+'" x2="'+f2(lineEndX)+'" y2="'+f2(lineEndY)+'" stroke="'+c.color+'" stroke-width="0.9" stroke-opacity="0.65"/>';
+    }
+    // Category name (smaller, above the percentage)
+    svg+='<text x="'+f2(lx)+'" y="'+f2(ly-4)+'" text-anchor="middle" font-size="6.5" font-weight="700" fill="'+c.color+'" font-family="Space Mono,monospace">'+c.name+'</text>';
+    // Percentage (larger, below the name)
+    svg+='<text x="'+f2(lx)+'" y="'+f2(ly+8)+'" text-anchor="middle" font-size="9" font-weight="700" fill="'+c.color+'" font-family="Space Mono,monospace">'+pct+'%</text>';
+  });
+
   svg+='</svg>';
-  return '<div style="display:flex;justify-content:center">'+svg+'</div>';
+
+  const dayWord=loggedCount===1?'DAY':'DAYS';
+  const sub1='<div style="text-align:center;font-family:var(--mono);font-size:9px;color:var(--mute);letter-spacing:0.04em;margin-top:5px">CENTER = DAYS WITH 3+ CATS ≥80</div>';
+  const sub2='<div style="text-align:center;font-family:var(--mono);font-size:9px;color:var(--mute);letter-spacing:0.04em;margin-top:2px">'+loggedCount+' '+dayWord+' LOGGED</div>';
+  return '<div style="padding:4px 0">'+svg+sub1+sub2+'</div>';
 }
 function waveBannerHtml(message, subtext, color, color2){
   const isLight=document.documentElement.dataset.theme==='light';
@@ -1176,7 +1390,8 @@ function buildBackupPayload(){
     days: DB.allDays(),
     projects: DB.projects(),
     transactions: DB.transactions(),
-    goals: DB.goals()
+    goals: DB.goals(),
+    books: DB.books()
   };
 }
 function exportData(){
@@ -1215,6 +1430,7 @@ function importDataFile(file){
       localStorage.setItem('lo_projects', JSON.stringify(parsed.projects||[]));
       localStorage.setItem('lo_transactions', JSON.stringify(parsed.transactions||[]));
       localStorage.setItem('lo_goals', JSON.stringify(parsed.goals||{trading:0,longrange:0,savedSoFar:0,tradingWithdrawn:0}));
+      localStorage.setItem('lo_books', JSON.stringify(parsed.books||[]));
       day = DB.day(EDIT_DATE);
       closeModal();
       renderAll();
@@ -1310,7 +1526,7 @@ function openDayDetail(dateStr){
   }
 
   html += '<div style="font-family:var(--mono);font-size:9px;color:var(--growth);letter-spacing:1px;margin:14px 0 6px">GROWTH</div>';
-  const growthLabels = {frame:'Frame with women',eyecontact:'Eye contact',posture:'Posture check',metacognition:'Metacognition',impulse:'Impulse control',delayedgrat:'Delayed gratification',nameemotion:'Naming emotion first',spokeup:'Spoke up',initiated:'Initiated',fear:'Acted despite fear',words:'Economy of words',listening:'Active listening',rehearsal:'Mental rehearsal',strictself:'Strict with myself',strictothers:'Strict with others'};
+  const growthLabels = {eyecontact:'Eye contact and presence',posture:'Posture check',spokefirst:'Spoke first',heldsilence:'Held comfortable silence',stayedconvo:'Stayed in the conversation',approached:'Approached someone new',smiledstranger:'Smiled at a stranger',heldground:'Held ground under pressure',normshrink:"Didn't shrink in group",frame:'Frame with women',noticedreaction:'Noticed my reaction before acting',pausedbefore:'Paused before responding',nameemotion:'Named emotion before reacting',impulse:'Impulse control',letgo:'Let go of something',calmunder:'Stayed calm under pressure',notpersonal:"Didn't take it personally",satwith:'Sat with discomfort',fear:'Did something despite fear',initiated:'Initiated instead of waited',askedwanted:'Asked for what I wanted',tookrisk:'Took a calculated risk',hardercall:'Made the harder call',saidyes:'Said yes to something scary',confronted:'Confronted something avoided',setboundary:'Set a boundary',saidno:'Said no and held it',words:'Economy of words',toldtruth:'Told the truth directly',askedneeded:'Asked for what I needed',endedit:'Ended a conversation cleanly',keptcommit:'Kept a commitment',finishedit:'Finished what I started',nodistract:'Worked without distraction',stucktoplan:'Stuck to the plan',didthing:'Did the thing I was avoiding',delayedgrat:'Delayed gratification',showedup:"Showed up when I didn't want to",strictself:'Strict with myself',reachedout:'Reached out to someone',listening:'Active listening',appreciated:'Expressed genuine appreciation',repaired:'Repaired a rupture',fullattention:'Gave full attention',checkedin:'Checked in on someone',learned:'Learned something new',reflectedmistake:'Reflected on a mistake',hardquestion:'Asked myself a hard question',changedmind:'Changed my mind with evidence',tookfeedback:'Took feedback without defensiveness',rehearsal:'Mental rehearsal',tookrespons:'Took responsibility',madedecision:'Made a clear decision',spokegroup:'Spoke up in a group',tooklead:'Took the lead',delegated:'Delegated effectively',protectedtime:'Protected my time'};
   const growthDone = Object.keys(growthLabels).filter(k=>rec.growth[k]).map(k=>growthLabels[k]);
   html += '<div style="font-size:11px;color:var(--text)">'+(growthDone.length?growthDone.join(', '):'Nothing logged')+'</div>';
 
@@ -1404,8 +1620,8 @@ function compareDayHtml(tab, color){
     const tg=day.growth;
     const rg=refRec&&refRec.growth?refRec.growth:null;
     rows+=cmpRow('Items hit',
-      rg?'<span style="color:'+color+'">'+GROWTH_ITEMS.filter(k=>rg[k]).length+'/15</span>':'<span style="color:var(--mute)">--</span>',
-      '<span style="color:'+color+'">'+GROWTH_ITEMS.filter(k=>tg[k]).length+'/15</span>');
+      rg?'<span style="color:'+color+'">'+GROWTH_ITEMS.filter(k=>rg[k]).length+'/'+GROWTH_ITEMS.length+'</span>':'<span style="color:var(--mute)">--</span>',
+      '<span style="color:'+color+'">'+GROWTH_ITEMS.filter(k=>tg[k]).length+'/'+GROWTH_ITEMS.length+'</span>');
   }
 
   const ab='font-family:var(--mono);font-size:13px;padding:1px 8px;border-radius:4px;border:1px solid var(--border);background:transparent;cursor:pointer;';
@@ -1477,11 +1693,17 @@ function calendarHtml(all, calY, calM, calMode){
         const isBest=dn===bestDay;
         const isWorst=dn===worstDay;
         if(calMode==='cards'){
-          // Tier color is ALWAYS based on actual score — best/worst never overrides hue
-          const tierBase=sc===null?null:sc>=80?'rgba(61,220,151,':sc>=50?'rgba(224,180,84,':'rgba(210,45,45,';
           const isHighlight=(isBest||isWorst)&&sc!==null;
-          const bg=sc===null?'var(--track-bg)':tierBase+(isHighlight?'.32':'.15')+')';
-          const sc_col=sc===null?'var(--mute)':sc>=80?'var(--green)':sc>=50?'var(--amber)':'rgba(230,85,85,1)';
+          let bg,sc_col;
+          if(sc===null){
+            bg='var(--track-bg)'; sc_col='var(--mute)';
+          } else {
+            const isGreen=sc>=50;
+            const intensity=isGreen?(sc-50)/50:(50-sc)/50;
+            const bgOp=isHighlight?0.35:(0.12+intensity*0.38);
+            bg='rgba('+(isGreen?'61,220,151':'210,45,45')+','+bgOp.toFixed(2)+')';
+            sc_col=isGreen?'var(--green)':'rgba(230,85,85,1)';
+          }
           // Glow ring: worst takes priority over best when the same day is tied
           let shadow='';
           if(isWorst&&sc!==null) shadow=isLight?'box-shadow:0 0 0 2px rgba(210,45,45,.9)':'box-shadow:0 0 0 2px rgba(210,45,45,.9),0 0 8px rgba(210,45,45,.5)';
@@ -1636,10 +1858,30 @@ function renderHome(){
   html += '</div>';
 
   const convAll=DB.allDays();
-  const convKeys=Object.keys(convAll).filter(k=>k.startsWith(monthPrefix));
+  let convKeys;
+  if(convPeriod==='daily'){
+    convKeys=Object.keys(convAll).filter(k=>k===TODAY);
+  } else if(convPeriod==='weekly'){
+    // Monday-start week to date — same convention as Review's getWeekDays
+    const wd=new Date(TODAY);
+    const daysSinceMon=(wd.getDay()+6)%7;
+    wd.setDate(wd.getDate()-daysSinceMon);
+    const weekStart=wd.toISOString().slice(0,10);
+    convKeys=Object.keys(convAll).filter(k=>k>=weekStart&&k<=TODAY);
+  } else {
+    convKeys=Object.keys(convAll).filter(k=>k.startsWith(monthPrefix));
+  }
+  const convRangeLabel=convPeriod==='daily'?'TODAY':convPeriod==='weekly'?'THIS WEEK':'THIS MONTH';
   const convCount=convKeys.filter(ds=>{ const r=convAll[ds]; return [faithScore(r),healthScore(r),musicScore(r),financeScore(r),growthScore(r)].filter(s=>s>=80).length>=3; }).length;
-  html += sectionLabel('CONVERGENCE — THIS MONTH','var(--faith)');
-  html += '<div class="card">'+triCircleHtml(convCount,'3+ CATS ≥80 · '+convKeys.length+' DAYS LOGGED')+'</div>';
+  const convScorers=[faithScore,healthScore,musicScore,financeScore,growthScore];
+  const convHitRates=convScorers.map(fn=>convKeys.length?convKeys.filter(ds=>fn(convAll[ds])>=80).length/convKeys.length:0);
+  const convPeriodSel='<div class="btn-group" style="margin-bottom:8px">'
+    +'<button class="opt-btn conv-period-btn'+(convPeriod==='daily'?' sel':'')+'" data-conv-period="daily">Daily</button>'
+    +'<button class="opt-btn conv-period-btn'+(convPeriod==='weekly'?' sel':'')+'" data-conv-period="weekly">Weekly</button>'
+    +'<button class="opt-btn conv-period-btn'+(convPeriod==='monthly'?' sel':'')+'" data-conv-period="monthly">Monthly</button>'
+    +'</div>';
+  html += sectionLabel('CONVERGENCE — '+convRangeLabel,'var(--faith)');
+  html += '<div class="card">'+convPeriodSel+convergenceClusterHtml(convCount,convKeys.length,convHitRates)+'</div>';
 
   const calMode = localStorage.getItem('lo_cal_mode')||'cards';
   const calDate = new Date(new Date(TODAY).getFullYear(), new Date(TODAY).getMonth()-calMonthOffset, 1);
@@ -1660,6 +1902,8 @@ function renderHome(){
   html += sectionLabel('STILL OPEN TODAY');
   let open = [];
   if(!(todayRec.music.sessions&&todayRec.music.sessions.length>0)) open.push('Music session not logged');
+  if(!(todayRec.reading&&(todayRec.reading.sessions||[]).length>0)) open.push('Reading session not logged');
+  if(!(todayRec.meditation&&(todayRec.meditation.sessions||[]).length>0)) open.push('Meditation session not logged');
   if(!todayRec.finance.logged) open.push('Finance not logged today');
   if(!Object.keys(todayRec.faith).length) open.push('Prayers not set today');
   html += '<div class="card">'+(open.length ? open.map(o=>'<div class="checkline"><span class="box">&#9633;</span>'+o+'</div>').join('') : '<div style="font-size:11px;color:var(--mute)">Everything logged for today.</div>')+'</div>';
@@ -1704,6 +1948,9 @@ function renderHome(){
   if(calFwdBtn) calFwdBtn.addEventListener('click', ()=>{ if(calMonthOffset>0){ calMonthOffset--; renderHome(); } });
   s.querySelectorAll('.cal-mode-btn').forEach(b=>{
     b.addEventListener('click', ()=>{ localStorage.setItem('lo_cal_mode', b.dataset.calMode); renderHome(); });
+  });
+  s.querySelectorAll('.conv-period-btn').forEach(b=>{
+    b.addEventListener('click',()=>{ convPeriod=b.dataset.convPeriod; renderHome(); });
   });
   document.getElementById('export-data').addEventListener('click', exportData);
   document.getElementById('import-data').addEventListener('click', ()=> document.getElementById('import-file').click());
@@ -1991,7 +2238,7 @@ function renderFaith(){
   html += flameStat('FAJR STREAK', fajrStreak, 'var(--faith)');
 
   const sc = faithScore(day);
-  html += '<div class="card">'+'<div style="text-align:center"><div class="hero-num" style="font-size:26px;color:var(--faith)">'+sc+'</div><div style="font-family:var(--mono);font-size:9px;color:var(--mute);margin-top:4px">TODAY SCORE, CAUGHT 20 / DELAYED 5 / MISSED 0</div></div></div>';
+  html += '<div class="card">'+'<div style="text-align:center"><div class="hero-num" style="font-size:26px;color:var(--faith)">'+sc+'</div><div style="font-family:var(--mono);font-size:9px;color:var(--mute);margin-top:4px">TODAY SCORE, CAUGHT 16 / DELAYED 4 / MISSED 0</div></div></div>';
 
   html += sectionLabel('EXTRA PRACTICE, TAP YES/NO');
   html += '<div class="card">';
@@ -2645,6 +2892,81 @@ function openUpdateProjectModal(id){
     renderMusic();
   });
 }
+function openAddBookModal(){
+  openModal(
+    '<div class="modal-title">Add book</div>'+
+    '<label style="font-family:var(--mono);font-size:9px;color:var(--mute)">TITLE</label>'+
+    '<input class="input" id="nb-title" placeholder="Book title">'+
+    '<label style="font-family:var(--mono);font-size:9px;color:var(--mute);margin-top:8px;display:block">AUTHOR</label>'+
+    '<input class="input" id="nb-author" placeholder="Author">'+
+    '<label style="font-family:var(--mono);font-size:9px;color:var(--mute);margin-top:8px;display:block">STATUS</label>'+
+    '<div class="btn-group"><button class="opt-btn sel" id="nb-planned">Planned</button><button class="opt-btn" id="nb-reading">Reading</button></div>'+
+    '<div class="modal-actions"><button class="btn-cancel" id="nb-cancel">Cancel</button><button class="btn-primary" id="nb-save">Add</button></div>'
+  );
+  let bkStatus = 'planned';
+  document.getElementById('nb-planned').addEventListener('click', function(){ bkStatus='planned'; this.classList.add('sel'); document.getElementById('nb-reading').classList.remove('sel'); });
+  document.getElementById('nb-reading').addEventListener('click', function(){ bkStatus='reading'; this.classList.add('sel'); document.getElementById('nb-planned').classList.remove('sel'); });
+  document.getElementById('nb-cancel').addEventListener('click', closeModal);
+  document.getElementById('nb-save').addEventListener('click', ()=>{
+    const title = document.getElementById('nb-title').value.trim();
+    if(!title) return;
+    const author = document.getElementById('nb-author').value.trim();
+    const list = DB.books();
+    list.push({
+      id: 'bk'+Date.now(),
+      title: title,
+      author: author,
+      status: bkStatus,
+      progress: 0,
+      startedAt: bkStatus==='reading' ? EDIT_DATE : null,
+      finishedAt: null,
+      lastTouched: EDIT_DATE
+    });
+    DB.saveBooks(list);
+    closeModal();
+    renderGrowth();
+  });
+}
+function openUpdateBookModal(id){
+  const list = DB.books();
+  const b = list.find(x=>x.id===id);
+  if(!b) return;
+  const shortTitle = b.title.length>28 ? b.title.slice(0,26)+'…' : b.title;
+  openModal(
+    '<div class="modal-title">'+shortTitle+'</div>'+
+    '<label style="font-family:var(--mono);font-size:9px;color:var(--mute)">PROGRESS</label>'+
+    '<div class="btn-group">'+[0,25,50,75,100].map(v=>'<button class="opt-btn bk-pct-btn'+(b.progress===v?' sel':'')+'" data-bkpct="'+v+'">'+v+'%</button>').join('')+'</div>'+
+    '<div class="modal-actions">'+
+      '<button class="btn-cancel" id="bk-cancel">Cancel</button>'+
+      '<button class="btn-ghost" id="bk-abandon" style="border-color:var(--amber);color:var(--amber)">Abandon</button>'+
+      '<button class="btn-primary" id="bk-done">Mark done</button>'+
+    '</div>'
+  );
+  document.getElementById('bk-cancel').addEventListener('click', closeModal);
+  document.querySelectorAll('.bk-pct-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      b.progress = parseInt(btn.dataset.bkpct);
+      if(b.progress===100){ b.status='done'; b.finishedAt=b.finishedAt||EDIT_DATE; }
+      else if(b.status==='planned'||b.status==='abandoned'){ b.status='reading'; b.startedAt=b.startedAt||EDIT_DATE; }
+      b.lastTouched = EDIT_DATE;
+      DB.saveBooks(list);
+      closeModal();
+      renderGrowth();
+    });
+  });
+  document.getElementById('bk-abandon').addEventListener('click', ()=>{
+    b.status='abandoned'; b.lastTouched=EDIT_DATE;
+    DB.saveBooks(list);
+    closeModal();
+    renderGrowth();
+  });
+  document.getElementById('bk-done').addEventListener('click', ()=>{
+    b.status='done'; b.progress=100; b.finishedAt=b.finishedAt||EDIT_DATE; b.lastTouched=EDIT_DATE;
+    DB.saveBooks(list);
+    closeModal();
+    renderGrowth();
+  });
+}
 function openTxModal(){
   const cats = ['Rent','Food','Business costs','Transport','Weed','Cigarettes','Given to people','Home bills','Other'];
   let type='expense', category=cats[0];
@@ -3025,11 +3347,12 @@ function renderMusicReport(s){
   html+=sectionLabel('PROJECT PIPELINE — CURRENT STATE','var(--music)');
   html+=`<div class="card" style="padding:12px 14px">`;
 
-  // Pipeline counts (three-stat row)
-  html+=`<div style="display:flex;justify-content:space-around;text-align:center;padding-bottom:10px;border-bottom:1px solid var(--sep-alt);margin-bottom:10px">`;
-  html+=`<div><div style="font-family:DM Serif Display,serif;font-size:24px;font-weight:700;color:var(--mute)">${planned.length}</div><div style="font-family:var(--mono);font-size:8px;color:var(--mute)">PLANNED</div></div>`;
-  html+=`<div><div style="font-family:DM Serif Display,serif;font-size:24px;font-weight:700;color:var(--music)">${active.length}</div><div style="font-family:var(--mono);font-size:8px;color:var(--mute)">ACTIVE</div></div>`;
-  html+=`<div><div style="font-family:DM Serif Display,serif;font-size:24px;font-weight:700;color:var(--green)">${done.length}</div><div style="font-family:var(--mono);font-size:8px;color:var(--mute)">DONE</div></div>`;
+  // Pipeline funnel bars
+  const maxCount=Math.max(1,planned.length,active.length,done.length);
+  html+=`<div style="padding-bottom:2px;border-bottom:1px solid var(--sep-alt);margin-bottom:10px">`;
+  html+=progressRow('PLANNED',Math.round(planned.length/maxCount*100),planned.length,'var(--mute)');
+  html+=progressRow('ACTIVE',Math.round(active.length/maxCount*100),active.length,'var(--music)');
+  html+=progressRow('DONE',Math.round(done.length/maxCount*100),done.length,'var(--green)');
   html+=`</div>`;
 
   if(active.length){
@@ -3523,21 +3846,479 @@ function renderFinance(){
   patchAriaRoles(s);
 }
 
+/* ============ GROWTH REPORT ============ */
+function renderGrowthReport(s){
+  const all = DB.allDays();
+  const allDates = Object.keys(all).sort();
+
+  let periodDates;
+  if(growthReportPeriod==='today'){
+    periodDates = allDates.filter(d=>d===EDIT_DATE);
+  } else if(growthReportPeriod==='week'){
+    const d=new Date(EDIT_DATE); const daysSinceMon=(d.getDay()+6)%7; d.setDate(d.getDate()-daysSinceMon);
+    const weekStart=d.toISOString().slice(0,10);
+    periodDates = allDates.filter(d=>d>=weekStart&&d<=EDIT_DATE);
+  } else if(growthReportPeriod==='3week'){
+    const cut=new Date(EDIT_DATE); cut.setDate(cut.getDate()-20);
+    periodDates = allDates.filter(d=>d>=cut.toISOString().slice(0,10)&&d<=EDIT_DATE);
+  } else if(growthReportPeriod==='month'){
+    periodDates = allDates.filter(d=>d.startsWith(EDIT_DATE.slice(0,7)));
+  } else if(growthReportPeriod==='3month'){
+    const cut=new Date(EDIT_DATE); cut.setMonth(cut.getMonth()-3);
+    periodDates = allDates.filter(d=>d>=cut.toISOString().slice(0,10));
+  } else {
+    periodDates = allDates;
+  }
+
+  const periodRecs = periodDates.map(d=>all[d]).filter(Boolean);
+  const N = periodRecs.length;
+  const scoredDays = periodRecs.map(r=>growthScore(r));
+  const activeDays = scoredDays.filter(s=>s>0).length;
+  const periodAvg = N>0 ? Math.round(scoredDays.reduce((a,b)=>a+b,0)/N) : 0;
+
+  // Best streak (all-time: consecutive days growthScore > 0)
+  let bestStreak=0, run=0;
+  allDates.forEach(ds=>{ const r=all[ds]; if(r&&growthScore(r)>0){run++;if(run>bestStreak)bestStreak=run;}else run=0; });
+
+  // Weekly aggregation (avg growthScore per calendar week)
+  function mondayOf(ds){ const d=new Date(ds); d.setDate(d.getDate()-((d.getDay()+6)%7)); return d.toISOString().slice(0,10); }
+  const weekMap={};
+  periodDates.forEach(ds=>{
+    const wk=mondayOf(ds);
+    if(!weekMap[wk]) weekMap[wk]={total:0,count:0,score:0};
+    const rec=all[ds];
+    if(rec){ weekMap[wk].total+=growthScore(rec); weekMap[wk].count++; }
+  });
+  Object.keys(weekMap).forEach(wk=>{ weekMap[wk].score=weekMap[wk].count>0?Math.round(weekMap[wk].total/weekMap[wk].count):0; });
+  const weeks=Object.keys(weekMap).sort();
+
+  const pLabel={'today':'TODAY','week':'THIS WEEK','3week':'LAST 3 WEEKS','month':'THIS MONTH','3month':'LAST 3 MONTHS','all':'ALL TIME'}[growthReportPeriod]||'ALL TIME';
+
+  let html =
+    `<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">`+
+    `<button class="btn-ghost" id="growth-report-back" style="border-color:var(--growth);color:var(--growth);padding:6px 14px;font-size:12px">← Back</button>`+
+    `<span style="font-family:var(--mono);font-size:9px;color:var(--mute);letter-spacing:0.05em">GROWTH REPORT</span>`+
+    `</div>`;
+
+  const row1=[['today','Today'],['week','This Week'],['3week','Last 3 Weeks']];
+  const row2=[['month','This Month'],['3month','Last 3 Months'],['all','All Time']];
+  html+=`<div class="btn-group" style="margin-bottom:6px">`;
+  row1.forEach(([key,label])=>{ html+=`<button class="opt-btn growth-rpt-period${growthReportPeriod===key?' sel':''}" data-period="${key}">${label}</button>`; });
+  html+=`</div><div class="btn-group" style="margin-bottom:14px">`;
+  row2.forEach(([key,label])=>{ html+=`<button class="opt-btn growth-rpt-period${growthReportPeriod===key?' sel':''}" data-period="${key}">${label}</button>`; });
+  html+=`</div>`;
+
+  html += sectionLabel(`CONSISTENCY — ${pLabel}`,'var(--growth)');
+  if(N===0){
+    html += `<div class="card" style="color:var(--mute);font-size:12px;text-align:center;padding:20px">No Growth data logged for this period</div>`;
+  } else {
+    html += `<div class="card" style="padding:12px 14px">`;
+    html += `<div style="display:flex;align-items:center;gap:16px;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--sep-alt)">`;
+    html += ringSvg(periodAvg,'var(--growth)',periodAvg+'%',72);
+    html += `<div style="flex:1;display:flex;flex-direction:column;gap:8px">`;
+    html += `<div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-family:var(--mono);font-size:8px;color:var(--mute)">PERIOD AVG</span><span style="font-family:DM Serif Display,serif;font-size:18px;font-weight:700;color:var(--growth)">${periodAvg}<span style="font-size:10px;color:var(--mute)">%</span></span></div>`;
+    html += `<div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-family:var(--mono);font-size:8px;color:var(--mute)">BEST STREAK</span><span style="font-family:DM Serif Display,serif;font-size:18px;font-weight:700;color:var(--growth)">${bestStreak}<span style="font-size:10px;color:var(--mute)">d</span></span></div>`;
+    html += `<div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-family:var(--mono);font-size:8px;color:var(--mute)">ACTIVE DAYS</span><span style="font-family:DM Serif Display,serif;font-size:18px;font-weight:700;color:var(--growth)">${activeDays}<span style="font-size:10px;color:var(--mute)">/${N}</span></span></div>`;
+    html += `</div></div>`;
+    if(weeks.length>0) html += growthWeekBarsSvg(weeks, weekMap);
+    html += `</div>`;
+  }
+
+  // ── PHASE 2: PER-GROUP HIT-RATE BARS ──
+  if(N>0){
+    const grpDefs=[
+      ['PRESENCE & SOCIAL',['eyecontact','posture','spokefirst','heldsilence','stayedconvo','approached','smiledstranger','heldground','normshrink','frame']],
+      ['EMOTIONAL CONTROL',['noticedreaction','pausedbefore','nameemotion','impulse','letgo','calmunder','notpersonal','satwith']],
+      ['COURAGE & INITIATIVE',['fear','initiated','askedwanted','tookrisk','hardercall','saidyes','confronted']],
+      ['BOUNDARIES & DIRECT',['setboundary','saidno','words','toldtruth','askedneeded','endedit']],
+      ['DISCIPLINE',['keptcommit','finishedit','nodistract','stucktoplan','didthing','delayedgrat','showedup','strictself']],
+      ['RELATIONSHIPS',['reachedout','listening','appreciated','repaired','fullattention','checkedin']],
+      ['MIND & REFLECTION',['learned','reflectedmistake','hardquestion','changedmind','tookfeedback','rehearsal']],
+      ['LEADERSHIP',['tookrespons','madedecision','spokegroup','tooklead','delegated','protectedtime']]
+    ];
+    html += sectionLabel(`GROUPS — ${pLabel}`,'var(--growth)');
+    html += `<div class="card" style="padding:10px 14px">`;
+    grpDefs.forEach(([grpName,keys],gi)=>{
+      let hits=0;
+      periodRecs.forEach(r=>{ if(r.growth) keys.forEach(k=>{ if(r.growth[k]) hits++; }); });
+      const rate=Math.round(hits/(keys.length*N)*100);
+      html += `<div style="margin-bottom:${gi<grpDefs.length-1?10:0}px">`;
+      html += `<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px"><span style="font-family:var(--mono);font-size:8px;color:var(--mute)">${grpName}</span><span style="font-family:var(--mono);font-size:9px;color:var(--growth)">${rate}%</span></div>`;
+      html += `<div style="height:4px;background:var(--track-bg);border-radius:2px;overflow:hidden"><div style="height:100%;width:${rate}%;background:var(--growth);border-radius:2px"></div></div>`;
+      html += `</div>`;
+    });
+    html += `</div>`;
+
+    // ── TOP 10 ITEMS ──
+    const GL={eyecontact:'Eye contact',posture:'Posture',spokefirst:'Spoke first',heldsilence:'Held silence',stayedconvo:'Stayed in convo',approached:'Approached',smiledstranger:'Smiled stranger',heldground:'Held ground',normshrink:'No shrinking',frame:'Frame',noticedreaction:'Noticed reaction',pausedbefore:'Paused first',nameemotion:'Named emotion',impulse:'Impulse ctrl',letgo:'Let go',calmunder:'Stayed calm',notpersonal:'Not personal',satwith:'Sat with it',fear:'Despite fear',initiated:'Initiated',askedwanted:'Asked wanted',tookrisk:'Took risk',hardercall:'Harder call',saidyes:'Said yes',confronted:'Confronted',setboundary:'Set boundary',saidno:'Said no',words:'Words economy',toldtruth:'Told truth',askedneeded:'Asked needed',endedit:'Ended it',keptcommit:'Kept commit',finishedit:'Finished it',nodistract:'No distraction',stucktoplan:'Stuck to plan',didthing:'Just did it',delayedgrat:'Delayed grat',showedup:'Showed up',strictself:'Strict self',reachedout:'Reached out',listening:'Listening',appreciated:'Expressed thanks',repaired:'Repaired',fullattention:'Full attention',checkedin:'Checked in',learned:'Learned',reflectedmistake:'Reflected mistake',hardquestion:'Hard question',changedmind:'Changed mind',tookfeedback:'Took feedback',rehearsal:'Rehearsal',tookrespons:'Took respons',madedecision:'Made decision',spokegroup:'Spoke in group',tooklead:'Took lead',delegated:'Delegated',protectedtime:'Protected time'};
+    const hitCounts={};
+    GROWTH_ITEMS.forEach(k=>{ hitCounts[k]=periodRecs.filter(r=>r.growth&&r.growth[k]).length; });
+    const top10=GROWTH_ITEMS.slice().sort((a,b)=>hitCounts[b]-hitCounts[a]).filter(k=>hitCounts[k]>0).slice(0,10);
+    if(top10.length>0){
+      const maxHit=hitCounts[top10[0]]||1;
+      html += sectionLabel(`TOP ITEMS — ${pLabel}`,'var(--growth)');
+      html += `<div class="card" style="padding:10px 14px">`;
+      top10.forEach((k,i)=>{
+        const cnt=hitCounts[k];
+        html += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:${i<top10.length-1?8:0}px">`;
+        html += `<span style="font-family:var(--mono);font-size:8px;color:var(--mute);min-width:14px;text-align:right">${i+1}</span>`;
+        html += `<span style="font-size:11px;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${GL[k]||k}</span>`;
+        html += `<div style="width:60px;height:4px;background:var(--track-bg);border-radius:2px;flex-shrink:0"><div style="height:100%;width:${Math.round(cnt/maxHit*100)}%;background:var(--growth);border-radius:2px"></div></div>`;
+        html += `<span style="font-family:var(--mono);font-size:9px;color:var(--growth);min-width:24px;text-align:right">${cnt}d</span>`;
+        html += `</div>`;
+      });
+      html += `</div>`;
+    }
+  }
+
+  // ── MOOD & ENERGY TREND ──
+  const moodDays=periodDates.map(ds=>{
+    const rec=all[ds];
+    if(!rec||!rec.mood||!rec.mood.entries||!rec.mood.entries.length) return null;
+    const ents=rec.mood.entries;
+    const avgMood=Math.round(ents.reduce((a,e)=>a+(e.moodScore||0),0)/ents.length*10)/10;
+    const avgEnergy=Math.round(ents.reduce((a,e)=>a+(e.energyScore||0),0)/ents.length*10)/10;
+    return {ds,avgMood,avgEnergy};
+  }).filter(Boolean);
+  if(moodDays.length>0){
+    const avgM=Math.round(moodDays.reduce((a,m)=>a+m.avgMood,0)/moodDays.length*10)/10;
+    const avgE=Math.round(moodDays.reduce((a,m)=>a+m.avgEnergy,0)/moodDays.length*10)/10;
+    html += sectionLabel(`MOOD & ENERGY — ${pLabel}`,'var(--growth)');
+    html += `<div class="card" style="padding:12px 14px">`;
+    html += `<div style="display:flex;gap:12px;margin-bottom:${moodDays.length>1?14:0}px">`;
+    html += `<div style="flex:1;text-align:center"><div style="font-family:var(--mono);font-size:8px;color:var(--mute);margin-bottom:4px">AVG MOOD</div><div style="font-family:DM Serif Display,serif;font-size:22px;font-weight:700;color:var(--growth)">${avgM}</div></div>`;
+    html += `<div style="flex:1;text-align:center"><div style="font-family:var(--mono);font-size:8px;color:var(--mute);margin-bottom:4px">AVG ENERGY</div><div style="font-family:DM Serif Display,serif;font-size:22px;font-weight:700;color:var(--finance)">${avgE}</div></div>`;
+    html += `</div>`;
+    if(moodDays.length>1) html += moodEnergyTrendSvg(moodDays);
+    html += `</div>`;
+  }
+
+  // ── READING SUMMARY ──
+  {
+    const allBooks=DB.books();
+    let rdSessions=[];
+    periodRecs.forEach(r=>{ (r.reading&&r.reading.sessions?r.reading.sessions:[]).forEach(s=>rdSessions.push(s)); });
+    const rdTotalSess=rdSessions.length;
+    const rdTotalMins=rdSessions.reduce((a,s)=>a+(s.minutes||0),0);
+    const rdTotalPages=rdSessions.reduce((a,s)=>a+(s.pages||0),0);
+    const rdDates=periodDates, rdMinsArr=periodDates.map(ds=>{ const r=all[ds]; return r&&r.reading?(r.reading.sessions||[]).reduce((a,s)=>a+(s.minutes||0),0):0; });
+    const rdActiveDays=rdMinsArr.filter(m=>m>0).length;
+    if(rdTotalSess>0||allBooks.length>0){
+      html += sectionLabel(`READING — ${pLabel}`,'var(--growth)');
+      if(rdTotalSess>0){
+        html += `<div class="card" style="padding:12px 14px">`;
+        html += `<div style="display:flex;gap:8px;margin-bottom:${rdActiveDays>1?14:0}px">`;
+        html += `<div style="flex:1;text-align:center"><div style="font-family:var(--mono);font-size:7px;color:var(--mute);margin-bottom:3px">SESSIONS</div><div style="font-family:DM Serif Display,serif;font-size:20px;font-weight:700;color:var(--growth)">${rdTotalSess}</div></div>`;
+        html += `<div style="flex:1;text-align:center"><div style="font-family:var(--mono);font-size:7px;color:var(--mute);margin-bottom:3px">MINUTES</div><div style="font-family:DM Serif Display,serif;font-size:20px;font-weight:700;color:var(--growth)">${rdTotalMins}</div></div>`;
+        if(rdTotalPages>0) html += `<div style="flex:1;text-align:center"><div style="font-family:var(--mono);font-size:7px;color:var(--mute);margin-bottom:3px">PAGES</div><div style="font-family:DM Serif Display,serif;font-size:20px;font-weight:700;color:var(--growth)">${rdTotalPages}</div></div>`;
+        html += `</div>`;
+        if(rdActiveDays>1) html += dailyMinsBarSvg(rdDates, rdMinsArr,'var(--growth)');
+        html += `</div>`;
+      }
+      const rdBooks=allBooks.filter(b=>b.status==='reading');
+      const plannedBooks=allBooks.filter(b=>b.status==='planned');
+      const doneBooks=allBooks.filter(b=>b.status==='done');
+      const abandonedBooks=allBooks.filter(b=>b.status==='abandoned');
+      if(allBooks.length>0){
+        html += `<div class="card" style="padding:10px 14px">`;
+        html += `<div style="font-family:var(--mono);font-size:8px;color:var(--mute);letter-spacing:0.05em;margin-bottom:${rdBooks.length?8:4}px">BOOKS PIPELINE <span style="font-size:7px;opacity:0.5">(all-time — no finish date recorded)</span></div>`;
+        rdBooks.forEach(b=>{
+          html += `<div style="margin-bottom:8px"><div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px"><span style="font-size:11px;color:var(--text)">${b.title}</span><span style="font-family:var(--mono);font-size:9px;color:var(--growth)">${b.progress}%</span></div>`;
+          html += `<div style="height:3px;background:var(--track-bg);border-radius:2px;overflow:hidden"><div style="height:100%;width:${b.progress}%;background:var(--growth);border-radius:2px"></div></div></div>`;
+        });
+        const pMeta=[];
+        if(plannedBooks.length) pMeta.push(plannedBooks.length+' planned');
+        if(doneBooks.length) pMeta.push(doneBooks.length+' finished');
+        if(abandonedBooks.length) pMeta.push(abandonedBooks.length+' abandoned');
+        if(pMeta.length) html += `<div style="font-size:10px;color:var(--mute);margin-top:${rdBooks.length?2:0}px">${pMeta.join(' · ')}</div>`;
+        html += `</div>`;
+      }
+    }
+  }
+
+  // ── MEDITATION SUMMARY ──
+  {
+    const MT_TYPE_LABELS={breathing:'Breathing',bodyscan:'Body scan',mantra:'Mantra',guided:'Guided',silent:'Silent'};
+    let mtSessions=[],mtTypeCounts={};
+    periodRecs.forEach(r=>{ (r.meditation&&r.meditation.sessions?r.meditation.sessions:[]).forEach(s=>{ mtSessions.push(s); if(s.type) mtTypeCounts[s.type]=(mtTypeCounts[s.type]||0)+1; }); });
+    const mtTotalSess=mtSessions.length;
+    const mtTotalMins=mtSessions.reduce((a,s)=>a+(s.minutes||0),0);
+    const mtAvgMins=mtTotalSess>0?Math.round(mtTotalMins/mtTotalSess):0;
+    const mtDates=periodDates, mtMinsArr=periodDates.map(ds=>{ const r=all[ds]; return r&&r.meditation?(r.meditation.sessions||[]).reduce((a,s)=>a+(s.minutes||0),0):0; });
+    const mtActiveDays=mtMinsArr.filter(m=>m>0).length;
+    const typeKeys=Object.keys(mtTypeCounts).sort((a,b)=>mtTypeCounts[b]-mtTypeCounts[a]);
+    if(mtTotalSess>0){
+      html += sectionLabel(`MEDITATION — ${pLabel}`,'var(--growth)');
+      html += `<div class="card" style="padding:12px 14px">`;
+      html += `<div style="display:flex;gap:8px;margin-bottom:${typeKeys.length>0||mtActiveDays>1?12:0}px">`;
+      html += `<div style="flex:1;text-align:center"><div style="font-family:var(--mono);font-size:7px;color:var(--mute);margin-bottom:3px">SESSIONS</div><div style="font-family:DM Serif Display,serif;font-size:20px;font-weight:700;color:var(--growth)">${mtTotalSess}</div></div>`;
+      html += `<div style="flex:1;text-align:center"><div style="font-family:var(--mono);font-size:7px;color:var(--mute);margin-bottom:3px">MINUTES</div><div style="font-family:DM Serif Display,serif;font-size:20px;font-weight:700;color:var(--growth)">${mtTotalMins}</div></div>`;
+      html += `<div style="flex:1;text-align:center"><div style="font-family:var(--mono);font-size:7px;color:var(--mute);margin-bottom:3px">AVG / SESSION</div><div style="font-family:DM Serif Display,serif;font-size:20px;font-weight:700;color:var(--growth)">${mtAvgMins}<span style="font-size:10px;color:var(--mute)">m</span></div></div>`;
+      html += `</div>`;
+      if(typeKeys.length>0){
+        html += `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:${mtActiveDays>1?12:0}px">`;
+        typeKeys.forEach(t=>{ html += `<span style="font-family:var(--mono);font-size:9px;padding:3px 8px;border:1px solid var(--growth);border-radius:20px;color:var(--growth)">${MT_TYPE_LABELS[t]||t} <span style="opacity:0.6">${mtTypeCounts[t]}×</span></span>`; });
+        html += `</div>`;
+      }
+      if(mtActiveDays>1) html += dailyMinsBarSvg(mtDates, mtMinsArr,'var(--growth)');
+      html += `</div>`;
+    }
+  }
+
+  s.innerHTML = html;
+
+  s.querySelector('#growth-report-back').addEventListener('click',()=>{
+    growthReportOpen=false;
+    renderGrowth();
+  });
+  s.querySelectorAll('.growth-rpt-period').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      growthReportPeriod=btn.dataset.period;
+      renderGrowthReport(s);
+    });
+  });
+}
+
 /* ============ GROWTH ============ */
 function renderGrowth(){
   const s = document.getElementById('s-growth');
+  if(growthReportOpen){ renderGrowthReport(s); return; }
   const g = day.growth;
-  const groups = [
-    ['FRAME AND PRESENCE', [['frame','Frame with women'],['eyecontact','Eye contact and presence'],['posture','Posture and presence check']]],
-    ['MIND AND CONTROL', [['metacognition','Metacognition'],['impulse','Impulse control'],['delayedgrat','Delayed gratification'],['nameemotion','Naming emotion before reacting']]],
-    ['CONFIDENCE AND INITIATIVE', [['spokeup','Spoke up'],['initiated','Initiated instead of waited'],['fear','Did something despite fear']]],
-    ['DISCIPLINE', [['words','Economy of words'],['listening','Active listening'],['rehearsal','Mental rehearsal'],['strictself','Strict with myself'],['strictothers','Strict with others']]]
+  const GROWTH_GROUPS = [
+    ['PRESENCE & SOCIAL CONFIDENCE',[['eyecontact','Eye contact'],['posture','Posture'],['spokefirst','Spoke first'],['heldsilence','Held silence'],['stayedconvo','Stayed in convo'],['approached','Approached'],['smiledstranger','Smiled stranger'],['heldground','Held ground'],['normshrink','No shrinking'],['frame','Frame']]],
+    ['EMOTIONAL CONTROL & AWARENESS',[['noticedreaction','Noticed reaction'],['pausedbefore','Paused first'],['nameemotion','Named emotion'],['impulse','Impulse ctrl'],['letgo','Let go'],['calmunder','Stayed calm'],['notpersonal','Not personal'],['satwith','Sat with it']]],
+    ['COURAGE & INITIATIVE',[['fear','Despite fear'],['initiated','Initiated'],['askedwanted','Asked wanted'],['tookrisk','Took risk'],['hardercall','Harder call'],['saidyes','Said yes'],['confronted','Confronted']]],
+    ['BOUNDARIES & DIRECT COMMUNICATION',[['setboundary','Set boundary'],['saidno','Said no'],['words','Words economy'],['toldtruth','Told truth'],['askedneeded','Asked needed'],['endedit','Ended it']]],
+    ['DISCIPLINE & FOLLOW-THROUGH',[['keptcommit','Kept commit'],['finishedit','Finished it'],['nodistract','No distraction'],['stucktoplan','Stuck to plan'],['didthing','Just did it'],['delayedgrat','Delayed grat'],['showedup','Showed up'],['strictself','Strict self']]],
+    ['RELATIONSHIPS & CONNECTION',[['reachedout','Reached out'],['listening','Listening'],['appreciated','Expressed thanks'],['repaired','Repaired'],['fullattention','Full attention'],['checkedin','Checked in']]],
+    ['MIND, REFLECTION & GROWTH',[['learned','Learned'],['reflectedmistake','Reflected mistake'],['hardquestion','Hard question'],['changedmind','Changed mind'],['tookfeedback','Took feedback'],['rehearsal','Rehearsal']]],
+    ['LEADERSHIP & OWNERSHIP',[['tookrespons','Took respons'],['madedecision','Made decision'],['spokegroup','Spoke in group'],['tooklead','Took lead'],['delegated','Delegated'],['protectedtime','Protected time']]]
   ];
-  let html = compareDayHtml('growth','var(--growth)');
-  groups.forEach(gr=>{
+  const gFullLabels = {eyecontact:'Eye contact and presence',posture:'Posture check',spokefirst:'Spoke first',heldsilence:'Held comfortable silence',stayedconvo:'Stayed in the conversation',approached:'Approached someone new',smiledstranger:'Smiled at a stranger',heldground:'Held ground under pressure',normshrink:"Didn't shrink in group",frame:'Frame with women',noticedreaction:'Noticed my reaction before acting',pausedbefore:'Paused before responding',nameemotion:'Named emotion before reacting',impulse:'Impulse control',letgo:'Let go of something',calmunder:'Stayed calm under pressure',notpersonal:"Didn't take it personally",satwith:'Sat with discomfort',fear:'Did something despite fear',initiated:'Initiated instead of waited',askedwanted:'Asked for what I wanted',tookrisk:'Took a calculated risk',hardercall:'Made the harder call',saidyes:'Said yes to something scary',confronted:'Confronted something avoided',setboundary:'Set a boundary',saidno:'Said no and held it',words:'Economy of words',toldtruth:'Told the truth directly',askedneeded:'Asked for what I needed',endedit:'Ended a conversation cleanly',keptcommit:'Kept a commitment',finishedit:'Finished what I started',nodistract:'Worked without distraction',stucktoplan:'Stuck to the plan',didthing:'Did the thing I was avoiding',delayedgrat:'Delayed gratification',showedup:"Showed up when I didn't want to",strictself:'Strict with myself',reachedout:'Reached out to someone',listening:'Active listening',appreciated:'Expressed genuine appreciation',repaired:'Repaired a rupture',fullattention:'Gave full attention',checkedin:'Checked in on someone',learned:'Learned something new',reflectedmistake:'Reflected on a mistake',hardquestion:'Asked myself a hard question',changedmind:'Changed my mind with evidence',tookfeedback:'Took feedback without defensiveness',rehearsal:'Mental rehearsal',tookrespons:'Took responsibility',madedecision:'Made a clear decision',spokegroup:'Spoke up in a group',tooklead:'Took the lead',delegated:'Delegated effectively',protectedtime:'Protected my time'};
+  let html = `<div style="display:flex;justify-content:flex-end;margin-bottom:8px">`+
+    `<button class="btn-ghost" id="open-growth-report" style="border-color:var(--growth);color:var(--growth);padding:6px 14px;font-size:12px">Report →</button>`+
+    `</div>`;
+  html += compareDayHtml('growth','var(--growth)');
+
+  // ── MOOD & ENERGY ──
+  if(!day.mood) day.mood = {entries:[]};
+  const mo = day.mood;
+  const moEntries = mo.entries || [];
+  const MOOD_OPTS = [null,{n:1,emoji:'😞',word:'Awful'},{n:2,emoji:'😔',word:'Rough'},{n:3,emoji:'😕',word:'Off'},{n:4,emoji:'😐',word:'Meh'},{n:5,emoji:'🙂',word:'Okay'},{n:6,emoji:'😊',word:'Good'},{n:7,emoji:'😄',word:'Great'},{n:8,emoji:'🤗',word:'Really good'},{n:9,emoji:'🥳',word:'Amazing'},{n:10,emoji:'🤩',word:'Best day'}];
+  const ENERGY_OPTS = [null,{n:1,emoji:'🪫',word:'Empty'},{n:2,emoji:'😴',word:'Exhausted'},{n:3,emoji:'🥱',word:'Drained'},{n:4,emoji:'😑',word:'Low'},{n:5,emoji:'😌',word:'Steady'},{n:6,emoji:'🙂',word:'Decent'},{n:7,emoji:'💪',word:'Strong'},{n:8,emoji:'⚡',word:'Energized'},{n:9,emoji:'🔥',word:'Charged'},{n:10,emoji:'🚀',word:'Unstoppable'}];
+  html += sectionLabel('MOOD & ENERGY', 'var(--growth)');
+  html += '<div class="card">';
+  html += '<div style="font-family:var(--mono);font-size:9px;color:var(--mute);letter-spacing:1px;margin-bottom:8px">CHECK-INS TODAY</div>';
+  if(moEntries.length){
+    moEntries.forEach((me,mei)=>{
+      const moo = me.moodScore ? MOOD_OPTS[me.moodScore] : null;
+      const ene = me.energyScore ? ENERGY_OPTS[me.energyScore] : null;
+      const moodStr = moo ? moo.emoji+' '+moo.n+' — '+moo.word : '—';
+      const energyStr = ene ? ene.emoji+' '+ene.n+' — '+ene.word : '—';
+      html += '<div class="checkline" style="align-items:flex-start;gap:8px;padding:6px 0">'
+        +'<div style="flex:1"><div style="font-size:12px;color:var(--text)">'+moodStr+' · '+energyStr+'</div>'
+        +(me.note?'<div style="font-size:10px;color:var(--mute);margin-top:2px">"'+me.note+'"</div>':'')
+        +'</div>'
+        +'<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">'
+        +'<span style="font-family:var(--mono);font-size:10px;color:var(--mute)">'+me.loggedAt+'</span>'
+        +'<button data-del-moentry="'+mei+'" style="background:none;border:none;color:var(--mute);font-size:16px;cursor:pointer;padding:0;line-height:1">×</button>'
+        +'</div>'
+        +'</div>';
+    });
+  } else {
+    html += '<div style="font-size:11px;color:var(--mute);margin-bottom:6px">No check-ins yet today.</div>';
+  }
+  html += '<button class="btn-ghost" id="add-mood-btn" style="border-color:var(--growth);color:var(--growth);width:100%;margin-top:2px">+ Add check-in</button>';
+  if(moodDraftActive){
+    html += '<div style="border-top:1px solid var(--border);margin-top:12px;padding-top:12px">';
+    html += '<label style="font-family:var(--mono);font-size:9px;color:var(--mute)">MOOD</label>';
+    html += '<div style="margin-top:6px">';
+    for(let i=1;i<=10;i++){
+      const mo_o=MOOD_OPTS[i]; const mo_sel=moodDraft.moodScore===i;
+      html += '<button data-mood-score="'+i+'" style="display:flex;align-items:center;width:100%;padding:8px 10px;background:'+(mo_sel?'rgba(61,220,151,0.08)':'transparent')+';border:1px solid '+(mo_sel?'var(--growth)':'var(--border)')+';border-radius:10px;margin-bottom:4px;cursor:pointer;gap:10px;text-align:left"><span style="font-size:16px">'+mo_o.emoji+'</span><span style="font-family:var(--mono);font-size:11px;color:var(--mute);min-width:16px">'+mo_o.n+'</span><span style="font-size:12px;color:'+(mo_sel?'var(--growth)':'var(--text)')+'">'+mo_o.word+'</span></button>';
+    }
+    html += '</div>';
+    html += '<label style="font-family:var(--mono);font-size:9px;color:var(--mute);margin-top:10px;display:block">ENERGY</label>';
+    html += '<div style="margin-top:6px">';
+    for(let i=1;i<=10;i++){
+      const en_o=ENERGY_OPTS[i]; const en_sel=moodDraft.energyScore===i;
+      html += '<button data-energy-score="'+i+'" style="display:flex;align-items:center;width:100%;padding:8px 10px;background:'+(en_sel?'rgba(61,220,151,0.08)':'transparent')+';border:1px solid '+(en_sel?'var(--growth)':'var(--border)')+';border-radius:10px;margin-bottom:4px;cursor:pointer;gap:10px;text-align:left"><span style="font-size:16px">'+en_o.emoji+'</span><span style="font-family:var(--mono);font-size:11px;color:var(--mute);min-width:16px">'+en_o.n+'</span><span style="font-size:12px;color:'+(en_sel?'var(--growth)':'var(--text)')+'">'+en_o.word+'</span></button>';
+    }
+    html += '</div>';
+    html += '<label style="font-family:var(--mono);font-size:9px;color:var(--mute);margin-top:8px;display:block">NOTE (OPTIONAL)</label>';
+    html += '<textarea class="input textarea" id="mood-draft-note" placeholder="How are you feeling?">'+(moodDraft.note||'')+'</textarea>';
+    html += '<div style="display:flex;gap:8px;margin-top:12px">'
+      +'<button class="btn-cancel" id="mood-draft-cancel" style="flex:1;padding:10px;border-radius:16px;font-family:var(--sans);font-weight:700;font-size:13px">Cancel</button>'
+      +'<button class="btn-primary" id="mood-draft-save" style="flex:1;padding:10px;border-radius:16px;font-family:var(--sans);font-weight:700;font-size:13px">Save</button>'
+      +'</div>';
+    html += '</div>';
+  }
+  html += '</div>';
+
+  const grDone = GROWTH_ITEMS.filter(k=>g[k]).length;
+  html += '<div style="text-align:right;font-family:var(--mono);font-size:11px;color:var(--mute);margin-bottom:4px"><span style="color:var(--growth);font-weight:700">'+grDone+'</span>/'+GROWTH_ITEMS.length+'</div>';
+  GROWTH_GROUPS.forEach(gr=>{
     html += sectionLabel(gr[0], 'var(--growth)');
-    html += '<div class="card">'+gr[1].map(x=>yesNoRow(x[0], x[1], g[x[0]])).join('')+'</div>';
+    html += '<div class="card" style="padding:10px 12px"><div style="display:flex;flex-wrap:wrap;gap:6px">'
+      +gr[1].map(x=>{const sel=!!g[x[0]];return '<button class="opt-btn growth-chip'+(sel?' sel':'')+'" data-yn-key="'+x[0]+'" data-yn-val="'+(sel?'no':'yes')+'" title="'+gFullLabels[x[0]]+'" style="flex:unset;min-width:0;padding:5px 10px'+(sel?';border-color:var(--growth)':'')+'">'+'<span style="font-size:10px">'+x[1]+'</span></button>';}).join('')
+      +'</div></div>';
   });
+
+  // ── READING ──
+  if(!day.reading) day.reading = {sessions:[], notes:''};
+  const rd = day.reading;
+  const rdSess = rd.sessions || [];
+  const allBooks = DB.books();
+  const readingBooks = allBooks.filter(b=>b.status==='reading');
+  const plannedBooks = allBooks.filter(b=>b.status==='planned');
+  const doneBooks = allBooks.filter(b=>b.status==='done');
+  const abandonedBooks = allBooks.filter(b=>b.status==='abandoned');
+  const habitSatisfied = rdSess.length > 0;
+
+  html += sectionLabel('READING', 'var(--growth)');
+
+  // Derived habit indicator (read-only, non-tappable)
+  html += '<div class="card" style="padding:10px 14px">';
+  if(habitSatisfied){
+    html += '<div class="checkline"><span style="color:var(--green);font-size:15px">✓</span><span style="color:var(--growth)">Reading habit satisfied</span><span style="font-family:var(--mono);font-size:9px;color:var(--mute);margin-left:auto">auto</span></div>';
+  } else {
+    html += '<div class="checkline"><span class="box" style="color:var(--mute)">&#9633;</span><span style="color:var(--mute)">No reading session logged yet</span><span style="font-family:var(--mono);font-size:9px;color:var(--mute);margin-left:auto">auto</span></div>';
+  }
+  html += '</div>';
+
+  // Book list
+  html += '<div class="card">';
+  html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">'
+    +'<span style="font-family:var(--mono);font-size:9px;color:var(--mute);letter-spacing:1px">BOOKS</span>'
+    +'<button class="btn-ghost" id="add-book-btn" style="border-color:var(--growth);color:var(--growth);padding:4px 10px;font-size:11px">+ Add book</button>'
+    +'</div>';
+  if(readingBooks.length){
+    readingBooks.forEach(b=>{
+      html += '<div class="checkline" style="display:block;padding:6px 0;border-bottom:1px solid var(--sep-alt)" data-book="'+b.id+'">';
+      html += '<div style="display:flex;justify-content:space-between;align-items:baseline">'
+        +'<span style="font-size:12px;font-weight:600;color:var(--text)">'+b.title+'</span>'
+        +'<span style="font-family:var(--mono);font-size:9px;color:var(--growth)">'+b.progress+'%</span>'
+        +'</div>';
+      if(b.author) html += '<div style="font-size:10px;color:var(--mute);margin-top:1px">'+b.author+'</div>';
+      html += '<div class="bar-track" style="margin-top:5px"><div class="bar-fill" style="width:'+b.progress+'%;background:var(--growth)"></div></div>';
+      html += '</div>';
+    });
+  }
+  if(plannedBooks.length){
+    plannedBooks.forEach(b=>{
+      html += '<div class="checkline" style="padding:5px 0;border-bottom:1px solid var(--sep-alt)" data-book="'+b.id+'">'
+        +'<span class="box">&#9633;</span>'
+        +'<span style="font-size:12px;color:var(--text)">'+b.title+'</span>'
+        +(b.author?'<span style="font-size:10px;color:var(--mute);margin-left:4px">· '+b.author+'</span>':'')
+        +'</div>';
+    });
+  }
+  if(!readingBooks.length && !plannedBooks.length){
+    html += '<div style="font-size:11px;color:var(--mute);padding:4px 0">No books added yet.</div>';
+  }
+  if(doneBooks.length) html += '<div style="font-size:10px;color:var(--mute);padding:5px 0 2px">'+doneBooks.length+' finished · '+(abandonedBooks.length)+' abandoned</div>';
+  else if(abandonedBooks.length) html += '<div style="font-size:10px;color:var(--mute);padding:5px 0 2px">'+abandonedBooks.length+' abandoned</div>';
+  html += '</div>';
+
+  // Today's sessions
+  html += '<div class="card">';
+  html += '<div style="font-family:var(--mono);font-size:9px;color:var(--mute);letter-spacing:1px;margin-bottom:8px">TODAY\'S SESSIONS</div>';
+  if(rdSess.length){
+    rdSess.forEach((rs,rsi)=>{
+      const bookName = rs.bookId ? (allBooks.find(b=>b.id===rs.bookId)||{}).title||rs.bookId : '—';
+      const meta=[];
+      if(rs.minutes!=null && rs.minutes>0) meta.push(rs.minutes+' min');
+      if(rs.pages!=null && rs.pages>0) meta.push(rs.pages+' pages');
+      if(rs.startTime&&rs.endTime) meta.push(rs.startTime+' → '+rs.endTime);
+      html += '<div class="checkline" style="align-items:flex-start;gap:8px;padding:6px 0">'
+        +'<div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--text)">'+bookName+'</div>'
+        +(meta.length?'<div style="font-size:10px;color:var(--mute);margin-top:2px">'+meta.join(' · ')+'</div>':'')
+        +'</div>'
+        +'<button data-del-rsess="'+rsi+'" style="background:none;border:none;color:var(--mute);font-size:16px;cursor:pointer;padding:0;line-height:1">×</button>'
+        +'</div>';
+    });
+  } else {
+    html += '<div style="font-size:11px;color:var(--mute);margin-bottom:6px">No sessions logged yet today.</div>';
+  }
+  html += '<button class="btn-ghost" id="add-reading-session-btn" style="border-color:var(--growth);color:var(--growth);width:100%;margin-top:2px">+ Add session</button>';
+  if(readingDraftActive){
+    const rdDrvMins=(readingDraft.startTime&&readingDraft.endTime)?deriveMinutes(readingDraft.startTime,readingDraft.endTime):null;
+    const rdShowMins=(readingDraft.minutesSource==='manual'&&readingDraft.minutes!=null)?readingDraft.minutes:(rdDrvMins!=null?rdDrvMins:(readingDraft.minutes!=null?readingDraft.minutes:''));
+    html += '<div style="border-top:1px solid var(--border);margin-top:12px;padding-top:12px">';
+    html += '<label style="font-family:var(--mono);font-size:9px;color:var(--mute)">BOOK</label>';
+    html += '<select class="input" id="rd-book-select"><option value="">Select (optional)</option>';
+    [...readingBooks,...plannedBooks].forEach(b=>{ html += '<option value="'+b.id+'" '+(readingDraft.bookId===b.id?'selected':'')+'>'+b.title+(b.author?' — '+b.author:'')+'</option>'; });
+    html += '</select>';
+    html += '<label style="font-family:var(--mono);font-size:9px;color:var(--mute);margin-top:8px;display:block">TIME (OPTIONAL)</label>';
+    html += '<div style="display:flex;gap:8px;margin-top:4px">'
+      +'<button class="btn-ghost" id="rd-draft-start" style="flex:1;font-family:var(--mono);font-size:12px;padding:8px">Start: '+(readingDraft.startTime||'--:--')+'</button>'
+      +'<button class="btn-ghost" id="rd-draft-end" style="flex:1;font-family:var(--mono);font-size:12px;padding:8px">End: '+(readingDraft.endTime||'--:--')+'</button>'
+      +'</div>';
+    html += '<label style="font-family:var(--mono);font-size:9px;color:var(--mute);margin-top:8px;display:block">DURATION (MINUTES)</label>';
+    html += '<input type="number" class="input" id="rd-draft-mins" value="'+rdShowMins+'" placeholder="How long" min="0">';
+    html += '<label style="font-family:var(--mono);font-size:9px;color:var(--mute);margin-top:8px;display:block">PAGES READ (OPTIONAL)</label>';
+    html += '<input type="number" class="input" id="rd-draft-pages" value="'+(readingDraft.pages!=null?readingDraft.pages:'')+'" placeholder="How many pages" min="0">';
+    html += '<div style="display:flex;gap:8px;margin-top:12px">'
+      +'<button class="btn-cancel" id="rd-draft-cancel" style="flex:1;padding:10px;border-radius:16px;font-family:var(--sans);font-weight:700;font-size:13px">Cancel</button>'
+      +'<button class="btn-primary" id="rd-draft-save" style="flex:1;padding:10px;border-radius:16px;font-family:var(--sans);font-weight:700;font-size:13px">Save</button>'
+      +'</div>';
+    html += '</div>';
+  }
+  html += '</div>';
+
+  // ── MEDITATION ──
+  if(!day.meditation) day.meditation = {sessions:[], notes:''};
+  const mt = day.meditation;
+  const mtSess = mt.sessions || [];
+  const mtHabitSatisfied = mtSess.length > 0;
+  const MT_TYPE_LABELS = {breathing:'Breathing',bodyscan:'Body scan',mantra:'Mantra',guided:'Guided',silent:'Silent'};
+
+  html += sectionLabel('MEDITATION', 'var(--growth)');
+  html += '<div class="card" style="padding:10px 14px">';
+  if(mtHabitSatisfied){
+    html += '<div class="checkline"><span style="color:var(--green);font-size:15px">✓</span><span style="color:var(--growth)">Meditation habit satisfied</span><span style="font-family:var(--mono);font-size:9px;color:var(--mute);margin-left:auto">auto</span></div>';
+  } else {
+    html += '<div class="checkline"><span class="box" style="color:var(--mute)">&#9633;</span><span style="color:var(--mute)">No meditation session logged yet</span><span style="font-family:var(--mono);font-size:9px;color:var(--mute);margin-left:auto">auto</span></div>';
+  }
+  html += '</div>';
+  html += '<div class="card">';
+  html += '<div style="font-family:var(--mono);font-size:9px;color:var(--mute);letter-spacing:1px;margin-bottom:8px">TODAY\'S SESSIONS</div>';
+  if(mtSess.length){
+    mtSess.forEach((ms,msi)=>{
+      const mmeta=[];
+      if(ms.minutes!=null&&ms.minutes>0) mmeta.push(ms.minutes+' min');
+      html += '<div class="checkline" style="align-items:flex-start;gap:8px;padding:6px 0">'
+        +'<div style="flex:1"><div style="font-size:13px;font-weight:600;color:var(--text)">'+(ms.type?(MT_TYPE_LABELS[ms.type]||ms.type):'Session')+'</div>'
+        +(mmeta.length||ms.note?'<div style="font-size:10px;color:var(--mute);margin-top:2px">'+mmeta.join(' · ')+(ms.note?(mmeta.length?' · ':'')+'"'+ms.note+'"':'')+'</div>':'')
+        +'</div>'
+        +'<button data-del-msess="'+msi+'" style="background:none;border:none;color:var(--mute);font-size:16px;cursor:pointer;padding:0;line-height:1">×</button>'
+        +'</div>';
+    });
+  } else {
+    html += '<div style="font-size:11px;color:var(--mute);margin-bottom:6px">No sessions logged yet today.</div>';
+  }
+  html += '<button class="btn-ghost" id="add-meditation-session-btn" style="border-color:var(--growth);color:var(--growth);width:100%;margin-top:2px">+ Add session</button>';
+  if(meditationDraftActive){
+    const MT_TYPES=[['breathing','Breathing'],['bodyscan','Body scan'],['mantra','Mantra'],['guided','Guided'],['silent','Silent']];
+    html += '<div style="border-top:1px solid var(--border);margin-top:12px;padding-top:12px">';
+    html += '<label style="font-family:var(--mono);font-size:9px;color:var(--mute)">TYPE</label>';
+    html += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">';
+    MT_TYPES.forEach(([val,lbl])=>{
+      const msel=meditationDraft.type===val;
+      html += '<button class="opt-btn mt-type-btn'+(msel?' sel':'')+'" data-mt-type="'+val+'" style="flex:unset;min-width:0;padding:5px 12px'+(msel?';border-color:var(--growth)':'')+'">'+'<span style="font-size:11px">'+lbl+'</span></button>';
+    });
+    html += '</div>';
+    html += '<label style="font-family:var(--mono);font-size:9px;color:var(--mute);margin-top:8px;display:block">DURATION (MINUTES)</label>';
+    html += '<input type="number" class="input" id="mt-draft-mins" value="'+(meditationDraft.minutes!=null?meditationDraft.minutes:'')+'" placeholder="How long" min="0">';
+    html += '<label style="font-family:var(--mono);font-size:9px;color:var(--mute);margin-top:8px;display:block">NOTE (OPTIONAL)</label>';
+    html += '<textarea class="input textarea" id="mt-draft-note" placeholder="How was the session?">'+(meditationDraft.note||'')+'</textarea>';
+    html += '<div style="display:flex;gap:8px;margin-top:12px">'
+      +'<button class="btn-cancel" id="mt-draft-cancel" style="flex:1;padding:10px;border-radius:16px;font-family:var(--sans);font-weight:700;font-size:13px">Cancel</button>'
+      +'<button class="btn-primary" id="mt-draft-save" style="flex:1;padding:10px;border-radius:16px;font-family:var(--sans);font-weight:700;font-size:13px">Save</button>'
+      +'</div>';
+    html += '</div>';
+  }
+  html += '</div>';
 
   html += sectionLabel('NOTES', 'var(--growth)');
   html += '<div class="card">'+'<textarea class="input textarea" id="growth-notes" placeholder="Notes for today">'+(g.notes||'')+'</textarea></div>';
@@ -3556,6 +4337,195 @@ function renderGrowth(){
   s.querySelectorAll('[data-yn-key]').forEach(p=>{
     p.addEventListener('click', ()=>{ g[p.dataset.ynKey] = p.dataset.ynVal==='yes'; renderGrowth(); });
   });
+
+  // Book tap → update modal
+  s.querySelectorAll('[data-book]').forEach(card=>{
+    card.addEventListener('click', ()=> openUpdateBookModal(card.dataset.book));
+  });
+  document.getElementById('add-book-btn').addEventListener('click', openAddBookModal);
+
+  // Delete reading session
+  s.querySelectorAll('[data-del-rsess]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      rdSess.splice(parseInt(btn.dataset.delRsess), 1);
+      renderGrowth();
+    });
+  });
+
+  // Add reading session
+  const addRSessBtn = document.getElementById('add-reading-session-btn');
+  if(addRSessBtn) addRSessBtn.addEventListener('click', ()=>{
+    readingDraftActive = true;
+    readingDraft = {bookId:'', startTime:null, endTime:null, minutes:null, pages:null, minutesSource:'unset'};
+    renderGrowth();
+  });
+
+  if(readingDraftActive){
+    const syncRdDraft = ()=>{
+      const bkEl = document.getElementById('rd-book-select');
+      if(bkEl) readingDraft.bookId = bkEl.value || null;
+      const mEl = document.getElementById('rd-draft-mins');
+      if(mEl && mEl.value!==''){readingDraft.minutes=parseInt(mEl.value)||0; readingDraft.minutesSource='manual';}
+      const pEl = document.getElementById('rd-draft-pages');
+      if(pEl && pEl.value!=='') readingDraft.pages = parseInt(pEl.value)||0;
+    };
+    const rdStartBtn = document.getElementById('rd-draft-start');
+    if(rdStartBtn) rdStartBtn.addEventListener('click', ()=>{
+      syncRdDraft();
+      openTimePickerModal('Start time', readingDraft.startTime||'07:00', v=>{
+        readingDraft.startTime = v;
+        if(readingDraft.startTime&&readingDraft.endTime&&readingDraft.minutesSource!=='manual'){
+          readingDraft.minutes = deriveMinutes(readingDraft.startTime, readingDraft.endTime);
+        }
+        renderGrowth();
+      });
+    });
+    const rdEndBtn = document.getElementById('rd-draft-end');
+    if(rdEndBtn) rdEndBtn.addEventListener('click', ()=>{
+      syncRdDraft();
+      openTimePickerModal('End time', readingDraft.endTime||'09:00', v=>{
+        readingDraft.endTime = v;
+        if(readingDraft.startTime&&readingDraft.endTime&&readingDraft.minutesSource!=='manual'){
+          readingDraft.minutes = deriveMinutes(readingDraft.startTime, readingDraft.endTime);
+        }
+        renderGrowth();
+      });
+    });
+    const rdMinsEl = document.getElementById('rd-draft-mins');
+    if(rdMinsEl) rdMinsEl.addEventListener('input', ()=>{
+      readingDraft.minutesSource = 'manual';
+      readingDraft.minutes = rdMinsEl.value!=='' ? parseInt(rdMinsEl.value) : null;
+    });
+    const rdCancelBtn = document.getElementById('rd-draft-cancel');
+    if(rdCancelBtn) rdCancelBtn.addEventListener('click', ()=>{ readingDraftActive=false; renderGrowth(); });
+    const rdSaveBtn = document.getElementById('rd-draft-save');
+    if(rdSaveBtn) rdSaveBtn.addEventListener('click', ()=>{
+      syncRdDraft();
+      const mEl = document.getElementById('rd-draft-mins');
+      if(mEl && mEl.value!==''){
+        const typed = parseInt(mEl.value)||0;
+        readingDraft.minutes = typed;
+        if(readingDraft.startTime && readingDraft.endTime){
+          readingDraft.minutesSource = (typed !== deriveMinutes(readingDraft.startTime, readingDraft.endTime)) ? 'manual' : 'derived';
+        } else { readingDraft.minutesSource = 'manual'; }
+      } else if(readingDraft.startTime && readingDraft.endTime){
+        readingDraft.minutes = deriveMinutes(readingDraft.startTime, readingDraft.endTime);
+        readingDraft.minutesSource = 'derived';
+      }
+      const pEl = document.getElementById('rd-draft-pages');
+      if(pEl && pEl.value!=='') readingDraft.pages = parseInt(pEl.value)||null;
+      if(!rd.sessions) rd.sessions = [];
+      rd.sessions.push({
+        bookId: readingDraft.bookId || null,
+        minutes: readingDraft.minutes != null ? readingDraft.minutes : 0,
+        pages: readingDraft.pages != null ? readingDraft.pages : null,
+        startTime: readingDraft.startTime || null,
+        endTime: readingDraft.endTime || null,
+        minutesSource: readingDraft.minutesSource || 'manual'
+      });
+      // Stamp lastTouched on the book
+      if(readingDraft.bookId){
+        const bkList = DB.books();
+        const bk = bkList.find(b=>b.id===readingDraft.bookId);
+        if(bk){ bk.lastTouched=EDIT_DATE; if(bk.status==='planned'){bk.status='reading';bk.startedAt=bk.startedAt||EDIT_DATE;} DB.saveBooks(bkList); }
+      }
+      readingDraftActive = false;
+      renderGrowth();
+    });
+  }
+
+  // Delete meditation session
+  s.querySelectorAll('[data-del-msess]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      mtSess.splice(parseInt(btn.dataset.delMsess), 1);
+      renderGrowth();
+    });
+  });
+
+  // Add meditation session
+  const addMSessBtn = document.getElementById('add-meditation-session-btn');
+  if(addMSessBtn) addMSessBtn.addEventListener('click', ()=>{
+    meditationDraftActive = true;
+    meditationDraft = {type:null, minutes:null, note:''};
+    renderGrowth();
+  });
+
+  if(meditationDraftActive){
+    s.querySelectorAll('.mt-type-btn').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        meditationDraft.type = meditationDraft.type===btn.dataset.mtType ? null : btn.dataset.mtType;
+        renderGrowth();
+      });
+    });
+    const mtCancelBtn = document.getElementById('mt-draft-cancel');
+    if(mtCancelBtn) mtCancelBtn.addEventListener('click', ()=>{ meditationDraftActive=false; renderGrowth(); });
+    const mtSaveBtn = document.getElementById('mt-draft-save');
+    if(mtSaveBtn) mtSaveBtn.addEventListener('click', ()=>{
+      const minsEl=document.getElementById('mt-draft-mins');
+      const noteEl=document.getElementById('mt-draft-note');
+      const mins=minsEl&&minsEl.value!==''?parseInt(minsEl.value)||0:0;
+      const note=noteEl&&noteEl.value.trim()?noteEl.value.trim():null;
+      if(!mt.sessions) mt.sessions=[];
+      mt.sessions.push({minutes:mins, type:meditationDraft.type||null, note:note});
+      meditationDraftActive=false;
+      renderGrowth();
+    });
+  }
+
+  // Delete mood entry
+  s.querySelectorAll('[data-del-moentry]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      moEntries.splice(parseInt(btn.dataset.delMoentry), 1);
+      renderGrowth();
+    });
+  });
+
+  // Add mood check-in
+  const addMoodBtn = document.getElementById('add-mood-btn');
+  if(addMoodBtn) addMoodBtn.addEventListener('click', ()=>{
+    moodDraftActive = true;
+    moodDraft = {moodScore:null, energyScore:null, note:''};
+    renderGrowth();
+  });
+
+  if(moodDraftActive){
+    s.querySelectorAll('[data-mood-score]').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        const sc = parseInt(btn.dataset.moodScore);
+        moodDraft.moodScore = moodDraft.moodScore===sc ? null : sc;
+        renderGrowth();
+      });
+    });
+    s.querySelectorAll('[data-energy-score]').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        const sc = parseInt(btn.dataset.energyScore);
+        moodDraft.energyScore = moodDraft.energyScore===sc ? null : sc;
+        renderGrowth();
+      });
+    });
+    const moodCancelBtn = document.getElementById('mood-draft-cancel');
+    if(moodCancelBtn) moodCancelBtn.addEventListener('click', ()=>{ moodDraftActive=false; renderGrowth(); });
+    const moodSaveBtn = document.getElementById('mood-draft-save');
+    if(moodSaveBtn) moodSaveBtn.addEventListener('click', ()=>{
+      const noteEl = document.getElementById('mood-draft-note');
+      const note = noteEl && noteEl.value.trim() ? noteEl.value.trim() : null;
+      if(!mo.entries) mo.entries = [];
+      mo.entries.push({
+        moodScore: moodDraft.moodScore || null,
+        energyScore: moodDraft.energyScore || null,
+        note: note,
+        loggedAt: new Date().toTimeString().slice(0,5)
+      });
+      moodDraftActive = false;
+      renderGrowth();
+    });
+  }
+
+  document.getElementById('open-growth-report').addEventListener('click',()=>{
+    growthReportOpen=true;
+    renderGrowth();
+  });
+
   document.getElementById('save-growth').addEventListener('click', ()=>{
     const notesEl=document.getElementById('growth-notes');
     if(notesEl) g.notes=notesEl.value;
@@ -3626,10 +4596,135 @@ function renderReview(){
     +'<div style="margin-top:6px">'+deltaHtml+'</div>'
     +'<div style="font-family:var(--mono);font-size:9px;color:var(--mute);margin-top:8px">'+wWithData.length+' of 7 days logged</div></div></div></div>';
 
+  // ─ WEEK OVERVIEW ─
+  html += sectionLabel('WEEK OVERVIEW','var(--home)');
+
+  // Radar: per-category averages for current viewed week
+  (function(){
+    const rCats=[
+      {key:'faith',   fn:faithScore  },
+      {key:'health',  fn:healthScore },
+      {key:'music',   fn:musicScore  },
+      {key:'finance', fn:financeScore},
+      {key:'growth',  fn:growthScore }
+    ];
+    const avgs=rCats.map(cat=>{
+      const days=wDays.filter(d=>d.rec&&d.rec[cat.key]);
+      return days.length?Math.round(days.reduce((a,d)=>a+cat.fn(d.rec),0)/days.length):null;
+    });
+    html+='<div class="card">'+weekRadarSvg(avgs[0],avgs[1],avgs[2],avgs[3],avgs[4])+'</div>';
+  })();
+
+  // 5×7 Weekly Grid
+  (function(){
+    const CAT_GRID=[
+      {label:'FA',key:'faith',   fn:faithScore,   color:'var(--faith)'},
+      {label:'HE',key:'health',  fn:healthScore,  color:'var(--health)'},
+      {label:'MU',key:'music',   fn:musicScore,   color:'var(--music)'},
+      {label:'FI',key:'finance', fn:financeScore, color:'var(--finance)'},
+      {label:'GR',key:'growth',  fn:growthScore,  color:'var(--growth)'}
+    ];
+    let g='<div class="card"><div style="display:grid;grid-template-columns:20px repeat(7,1fr);gap:2px">';
+    g+='<div></div>';
+    ['M','T','W','T','F','S','S'].forEach(d=>{
+      g+='<div style="text-align:center;font-family:var(--mono);font-size:8px;color:var(--mute);padding-bottom:3px">'+d+'</div>';
+    });
+    CAT_GRID.forEach(cat=>{
+      g+='<div style="display:flex;align-items:center;font-family:var(--mono);font-size:7px;font-weight:700;color:'+cat.color+'">'+cat.label+'</div>';
+      wDays.forEach(day=>{
+        if(!day.rec||!day.rec[cat.key]){
+          g+='<div style="height:26px;border-radius:3px;background:var(--track-bg);opacity:0.35"></div>';
+        } else {
+          const sc=cat.fn(day.rec);
+          const isGreen=sc>=50;
+          const intensity=isGreen?(sc-50)/50:(50-sc)/50;
+          const bgOp=(0.12+intensity*0.38).toFixed(2);
+          const bg='rgba('+(isGreen?'61,220,151':'210,45,45')+','+bgOp+')';
+          const tc=isGreen?'var(--green)':'rgba(230,85,85,1)';
+          g+='<div style="height:26px;border-radius:3px;background:'+bg+';display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:8px;color:'+tc+'">'+sc+'</div>';
+        }
+      });
+    });
+    g+='</div></div>';
+    html+=g;
+  })();
+
+  // 8-week trend-lines
+  (function(){
+    const WCOUNT=8;
+    const trendCats=[
+      {key:'faith',   fn:faithScore,   color:'var(--faith)',   label:'Faith'},
+      {key:'health',  fn:healthScore,  color:'var(--health)',  label:'Health'},
+      {key:'music',   fn:musicScore,   color:'var(--music)',   label:'Music'},
+      {key:'finance', fn:financeScore, color:'var(--finance)', label:'Finance'},
+      {key:'growth',  fn:growthScore,  color:'var(--growth)',  label:'Growth'}
+    ];
+    const weekData=[];
+    for(let i=0;i<WCOUNT;i++){
+      const wOff=reviewWeekOffset+(WCOUNT-1-i);
+      const wd=getWeekDays(wOff);
+      const entry={label:wd[0].date.toLocaleDateString('en-US',{month:'short',day:'numeric'})};
+      trendCats.forEach(cat=>{
+        const days=wd.filter(d=>d.rec&&d.rec[cat.key]);
+        entry[cat.key]=days.length?Math.round(days.reduce((a,d)=>a+cat.fn(d.rec),0)/days.length):null;
+      });
+      weekData.push(entry);
+    }
+    const WT=280,HT=140,lp=24,rp=6,tp=10,bp=22;
+    const pW=WT-lp-rp,pH=HT-tp-bp;
+    const xPos=i=>lp+i*(pW/(WCOUNT-1));
+    const yPos=v=>tp+(1-v/100)*pH;
+    const f=v=>v.toFixed(1);
+    let ts=`<svg viewBox="0 0 ${WT} ${HT}" style="width:100%;max-width:${WT}px;height:auto;display:block">`;
+    [0,25,50,75,100].forEach(v=>{
+      const y=f(yPos(v));
+      ts+=`<line x1="${lp}" y1="${y}" x2="${WT-rp}" y2="${y}" stroke="var(--sep-alt)" stroke-width="${v===50?0.8:0.5}" opacity="${v===50?0.6:0.35}"/>`;
+      ts+=`<text x="${f(lp-2)}" y="${f(yPos(v)+2.5)}" text-anchor="end" font-size="5.5" font-family="Space Mono,monospace" fill="var(--mute)">${v}</text>`;
+    });
+    weekData.forEach((w,i)=>{
+      if(i===0||i===WCOUNT-1||i===Math.floor((WCOUNT-1)/2)){
+        const anchor=i===0?'start':i===WCOUNT-1?'end':'middle';
+        ts+=`<text x="${f(xPos(i))}" y="${f(HT-4)}" text-anchor="${anchor}" font-size="5.5" font-family="Space Mono,monospace" fill="var(--mute)">${w.label}</text>`;
+      }
+    });
+    trendCats.forEach(cat=>{
+      let seg=[];
+      const flush=()=>{
+        if(seg.length>=2){
+          const d=seg.map(([xi,v],si)=>(si===0?'M':'L')+f(xPos(xi))+','+f(yPos(v))).join(' ');
+          ts+=`<path d="${d}" fill="none" stroke="${cat.color}" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round"/>`;
+        }
+        seg=[];
+      };
+      weekData.forEach((w,i)=>{
+        if(w[cat.key]!==null) seg.push([i,w[cat.key]]);
+        else flush();
+      });
+      flush();
+      weekData.forEach((w,i)=>{
+        if(w[cat.key]!==null) ts+=`<circle cx="${f(xPos(i))}" cy="${f(yPos(w[cat.key]))}" r="2" fill="${cat.color}"/>`;
+      });
+    });
+    ts+=`</svg>`;
+    let leg='<div style="display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:6px">';
+    trendCats.forEach(cat=>{
+      leg+='<div style="display:flex;align-items:center;gap:4px"><div style="width:14px;height:2px;background:'+cat.color+';border-radius:1px"></div><span style="font-family:var(--mono);font-size:7px;color:var(--mute)">'+cat.label+'</span></div>';
+    });
+    leg+='</div>';
+    html+='<div class="card">'+ts+leg+'</div>';
+  })();
+
   // ─ FAITH ─
   const fDays = wWithData.filter(d=>d.rec.faith);
   html += sectionLabel('FAITH THIS WEEK','var(--faith)');
   html += '<div class="card">';
+  if(fDays.length){
+    const PRAYERS=['fajr','dhuhr','asr','maghrib','isha'];
+    const avgPrayerPts=fDays.reduce((a,d)=>a+PRAYERS.reduce((b,p)=>b+(PRAYER_POINTS[d.rec.faith[p]||'unset']||0),0),0)/fDays.length;
+    const avgExtraPts=fDays.reduce((a,d)=>a+(d.rec.faith.tahajjud?10:0)+(d.rec.faith.gratitude?10:0),0)/fDays.length;
+    html+=progressRow('Prayers',Math.round(avgPrayerPts/80*100),Math.round(avgPrayerPts)+'/80','var(--faith)');
+    html+=progressRow('Extras',Math.round(avgExtraPts/20*100),Math.round(avgExtraPts)+'/20','var(--faith)');
+  }
   [['fajr','Fajr'],['dhuhr','Dhuhr'],['asr','Asr'],['maghrib','Maghrib'],['isha','Isha']].forEach(([k,n])=>{
     const c = fDays.filter(d=>d.rec.faith[k]==='caught').length;
     const dl = fDays.filter(d=>d.rec.faith[k]==='delayed').length;
@@ -3656,6 +4751,31 @@ function renderReview(){
   const hDays = wWithData.filter(d=>d.rec.health);
   html += sectionLabel('HEALTH THIS WEEK','var(--health)');
   html += '<div class="card">';
+  if(hDays.length){
+    const avgSleepPts=hDays.reduce((a,d)=>{
+      const sh=parseFloat(d.rec.health.sleepHours||0);
+      let p;if(sh>=7&&sh<=9)p=20;else if(sh<7)p=(sh/7)*20;else p=Math.max(0,(1-(sh-9)/3))*20;
+      return a+p;
+    },0)/hDays.length;
+    const avgHabitPts=hDays.reduce((a,d)=>{
+      const h=d.rec.health,wt=25/9;let p=0;
+      HEALTH_BOOL_GOOD.forEach(k=>{if(h[k])p+=wt;});
+      HEALTH_BOOL_BAD.forEach(k=>{if(!h[k])p+=wt;});
+      return a+p;
+    },0)/hDays.length;
+    const avgWBPts=hDays.reduce((a,d)=>{
+      const h=d.rec.health;
+      return a+Math.min((h.water||0)/5,1)*5+Math.min((h.brushing||0)/2,1)*5;
+    },0)/hDays.length;
+    const avgExPts=hDays.reduce((a,d)=>{
+      const h=d.rec.health;
+      return a+Math.min((h.pushupsReps||0)/30,1)*5+Math.min((h.abrollerReps||0)/15,1)*5+Math.min((h.kegelReps||0)/20,1)*5+Math.min((h.matroutineReps||0)/15,1)*5+Math.min((h.plankSeconds||0)/90,1)*5+Math.min((h.tennisMinutes||0)/45,1)*5+Math.min((h.runningKm||0)/3,1)*5+Math.min((h.hikingMinutes||0)/30,1)*5+Math.min((h.walkingMinutes||0)/30,1)*5;
+    },0)/hDays.length;
+    html+=progressRow('Sleep',Math.round(avgSleepPts/20*100),Math.round(avgSleepPts)+'/20','var(--health)');
+    html+=progressRow('Habits',Math.round(avgHabitPts/25*100),Math.round(avgHabitPts)+'/25','var(--health)');
+    html+=progressRow('Water & Brushing',Math.round(avgWBPts/10*100),Math.round(avgWBPts)+'/10','var(--health)');
+    html+=progressRow('Exercise',Math.round(avgExPts/45*100),Math.round(avgExPts)+'/45','var(--health)');
+  }
   const sleepDays = hDays.filter(d=>parseFloat(d.rec.health.sleepHours||0)>0);
   const sleepAvg = sleepDays.length ? Math.round(sleepDays.reduce((a,d)=>a+parseFloat(d.rec.health.sleepHours),0)/sleepDays.length*10)/10 : null;
   const waterDays = hDays.filter(d=>(d.rec.health.water||0)>0);
@@ -3686,6 +4806,26 @@ function renderReview(){
   const mDays = wWithData.filter(d=>d.rec.music);
   html += sectionLabel('MUSIC THIS WEEK','var(--music)');
   html += '<div class="card">';
+  if(mDays.length){
+    const avgProjPts=mDays.reduce((a,d)=>{
+      const sessions=d.rec.music.sessions||[];
+      const distinct=new Set(sessions.map(s=>s.workedOn).filter(w=>w&&w!=='')).size;
+      return a+Math.min(distinct/3,1)*40;
+    },0)/mDays.length;
+    const avgMinPts=mDays.reduce((a,d)=>{
+      const mins=(d.rec.music.sessions||[]).reduce((b,s)=>b+(s.minutes||0),0);
+      return a+Math.min(mins/90,1)*40;
+    },0)/mDays.length;
+    const avgQualPts=mDays.reduce((a,d)=>{
+      const sessions=d.rec.music.sessions||[];
+      const rated=sessions.filter(s=>s.quality!=null);
+      const aq=rated.length?rated.reduce((b,s)=>b+s.quality,0)/rated.length:0;
+      return a+(aq/5)*20;
+    },0)/mDays.length;
+    html+=progressRow('Projects',Math.round(avgProjPts/40*100),Math.round(avgProjPts)+'/40','var(--music)');
+    html+=progressRow('Minutes',Math.round(avgMinPts/40*100),Math.round(avgMinPts)+'/40','var(--music)');
+    html+=progressRow('Quality',Math.round(avgQualPts/20*100),Math.round(avgQualPts)+'/20','var(--music)');
+  }
   const sessionCount = mDays.filter(d=>(d.rec.music.sessions||[]).length>0).length;
   const totalMins = mDays.reduce((a,d)=>a+(d.rec.music.sessions||[]).reduce((b,s)=>b+(s.minutes||0),0),0);
   const projIds = [...new Set(mDays.flatMap(d=>(d.rec.music.sessions||[]).map(s=>s.workedOn).filter(w=>w&&w!=='instrumentals')))];
@@ -3708,6 +4848,11 @@ function renderReview(){
   let topCat=null, topCatAmt=0;
   expCats2.forEach(c=>{ const amt=wTxs.filter(t=>t.type==='expense'&&t.category===c).reduce((a,b)=>a+b.amount,0); if(amt>topCatAmt){topCatAmt=amt;topCat=c;} });
   html += '<div class="card">';
+  const finLoggedCount=wDays.filter(d=>d.rec&&d.rec.finance&&d.rec.finance.logged).length;
+  html+='<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;margin-bottom:4px;border-bottom:1px solid var(--sep-alt)">'
+    +'<span style="font-size:10px;color:var(--mute)">Logged</span>'
+    +'<span style="font-family:var(--mono);font-size:11px;font-weight:700;color:var(--finance)">'+finLoggedCount+' / 7 days</span>'
+    +'</div>';
   html += rr('Income', wIncome.toLocaleString(),'var(--finance)');
   html += rr('Expense', wExpense.toLocaleString(),'var(--red)');
   html += rr('Net', (wIncome-wExpense).toLocaleString(),(wIncome-wExpense)>=0?'var(--green)':'var(--red)');
@@ -3723,7 +4868,7 @@ function renderReview(){
   const wGrowthAvg = gDays.length ? Math.round(gDays.reduce((a,d)=>a+growthScore(d.rec),0)/gDays.length) : null;
   html += rr('Completion avg', wGrowthAvg!==null?wGrowthAvg+'%':'--','var(--growth)');
   if(gDays.length){
-    const gShort = {frame:'Frame',eyecontact:'Eye contact',posture:'Posture',metacognition:'Metacognition',impulse:'Impulse ctrl',delayedgrat:'Delayed grat',nameemotion:'Name emotion',spokeup:'Spoke up',initiated:'Initiated',fear:'Act vs fear',words:'Economy/words',listening:'Listening',rehearsal:'Rehearsal',strictself:'Strict self',strictothers:'Strict others'};
+    const gShort = {eyecontact:'Eye contact',posture:'Posture',spokefirst:'Spoke first',heldsilence:'Held silence',stayedconvo:'Stayed in convo',approached:'Approached',smiledstranger:'Smiled stranger',heldground:'Held ground',normshrink:'No shrinking',frame:'Frame',noticedreaction:'Noticed react',pausedbefore:'Paused first',nameemotion:'Named emotion',impulse:'Impulse ctrl',letgo:'Let go',calmunder:'Stayed calm',notpersonal:'Not personal',satwith:'Sat with it',fear:'Despite fear',initiated:'Initiated',askedwanted:'Asked wanted',tookrisk:'Took risk',hardercall:'Harder call',saidyes:'Said yes',confronted:'Confronted',setboundary:'Set boundary',saidno:'Said no',words:'Words economy',toldtruth:'Told truth',askedneeded:'Asked needed',endedit:'Ended it',keptcommit:'Kept commit',finishedit:'Finished it',nodistract:'No distraction',stucktoplan:'Stuck to plan',didthing:'Just did it',delayedgrat:'Delayed grat',showedup:'Showed up',strictself:'Strict self',reachedout:'Reached out',listening:'Listening',appreciated:'Expressed thanks',repaired:'Repaired',fullattention:'Full attention',checkedin:'Checked in',learned:'Learned',reflectedmistake:'Reflected mistake',hardquestion:'Hard question',changedmind:'Changed mind',tookfeedback:'Took feedback',rehearsal:'Rehearsal',tookrespons:'Took respons',madedecision:'Made decision',spokegroup:'Spoke in group',tooklead:'Took lead',delegated:'Delegated',protectedtime:'Protected time'};
     const hitCounts = {};
     GROWTH_ITEMS.forEach(k=>{ hitCounts[k]=gDays.filter(d=>d.rec.growth[k]).length; });
     const sorted = GROWTH_ITEMS.slice().sort((a,b)=>hitCounts[b]-hitCounts[a]);
@@ -3771,7 +4916,7 @@ function renderReview(){
     }
     const gDaysNa = wWithData.filter(d=>d.rec.growth);
     if(gDaysNa.length){
-      const gShortNa = {frame:'Frame',eyecontact:'Eye contact',posture:'Posture',metacognition:'Metacognition',impulse:'Impulse ctrl',delayedgrat:'Delayed grat',nameemotion:'Name emotion',spokeup:'Spoke up',initiated:'Initiated',fear:'Act vs fear',words:'Economy/words',listening:'Listening',rehearsal:'Rehearsal',strictself:'Strict self',strictothers:'Strict others'};
+      const gShortNa = {eyecontact:'Eye contact',posture:'Posture',spokefirst:'Spoke first',heldsilence:'Held silence',stayedconvo:'Stayed in convo',approached:'Approached',smiledstranger:'Smiled stranger',heldground:'Held ground',normshrink:'No shrinking',frame:'Frame',noticedreaction:'Noticed react',pausedbefore:'Paused first',nameemotion:'Named emotion',impulse:'Impulse ctrl',letgo:'Let go',calmunder:'Stayed calm',notpersonal:'Not personal',satwith:'Sat with it',fear:'Despite fear',initiated:'Initiated',askedwanted:'Asked wanted',tookrisk:'Took risk',hardercall:'Harder call',saidyes:'Said yes',confronted:'Confronted',setboundary:'Set boundary',saidno:'Said no',words:'Words economy',toldtruth:'Told truth',askedneeded:'Asked needed',endedit:'Ended it',keptcommit:'Kept commit',finishedit:'Finished it',nodistract:'No distraction',stucktoplan:'Stuck to plan',didthing:'Just did it',delayedgrat:'Delayed grat',showedup:'Showed up',strictself:'Strict self',reachedout:'Reached out',listening:'Listening',appreciated:'Expressed thanks',repaired:'Repaired',fullattention:'Full attention',checkedin:'Checked in',learned:'Learned',reflectedmistake:'Reflected mistake',hardquestion:'Hard question',changedmind:'Changed mind',tookfeedback:'Took feedback',rehearsal:'Rehearsal',tookrespons:'Took respons',madedecision:'Made decision',spokegroup:'Spoke in group',tooklead:'Took lead',delegated:'Delegated',protectedtime:'Protected time'};
       GROWTH_ITEMS.forEach(k=>{ items.push({label:'Growth: '+gShortNa[k], rate:gDaysNa.filter(d=>d.rec.growth[k]).length/gDaysNa.length}); });
     }
     const mDaysNa = wWithData.filter(d=>d.rec.music);
@@ -3863,7 +5008,7 @@ function computeNeglectGaps(){
     return 999;
   }
   const H=r=>(r.health||{}),F=r=>(r.faith||{}),G=r=>(r.growth||{});
-  const GL={frame:'Frame with women',eyecontact:'Eye contact',posture:'Posture check',metacognition:'Metacognition',impulse:'Impulse control',delayedgrat:'Delayed gratification',nameemotion:'Naming emotion first',spokeup:'Spoke up',initiated:'Initiated',fear:'Acted despite fear',words:'Economy of words',listening:'Active listening',rehearsal:'Mental rehearsal',strictself:'Strict with myself',strictothers:'Strict with others'};
+  const GL={eyecontact:'Eye contact and presence',posture:'Posture check',spokefirst:'Spoke first',heldsilence:'Held comfortable silence',stayedconvo:'Stayed in the conversation',approached:'Approached someone new',smiledstranger:'Smiled at a stranger',heldground:'Held ground under pressure',normshrink:"Didn't shrink in group",frame:'Frame with women',noticedreaction:'Noticed my reaction before acting',pausedbefore:'Paused before responding',nameemotion:'Named emotion before reacting',impulse:'Impulse control',letgo:'Let go of something',calmunder:'Stayed calm under pressure',notpersonal:"Didn't take it personally",satwith:'Sat with discomfort',fear:'Did something despite fear',initiated:'Initiated instead of waited',askedwanted:'Asked for what I wanted',tookrisk:'Took a calculated risk',hardercall:'Made the harder call',saidyes:'Said yes to something scary',confronted:'Confronted something avoided',setboundary:'Set a boundary',saidno:'Said no and held it',words:'Economy of words',toldtruth:'Told the truth directly',askedneeded:'Asked for what I needed',endedit:'Ended a conversation cleanly',keptcommit:'Kept a commitment',finishedit:'Finished what I started',nodistract:'Worked without distraction',stucktoplan:'Stuck to the plan',didthing:'Did the thing I was avoiding',delayedgrat:'Delayed gratification',showedup:"Showed up when I didn't want to",strictself:'Strict with myself',reachedout:'Reached out to someone',listening:'Active listening',appreciated:'Expressed genuine appreciation',repaired:'Repaired a rupture',fullattention:'Gave full attention',checkedin:'Checked in on someone',learned:'Learned something new',reflectedmistake:'Reflected on a mistake',hardquestion:'Asked myself a hard question',changedmind:'Changed my mind with evidence',tookfeedback:'Took feedback without defensiveness',rehearsal:'Mental rehearsal',tookrespons:'Took responsibility',madedecision:'Made a clear decision',spokegroup:'Spoke up in a group',tooklead:'Took the lead',delegated:'Delegated effectively',protectedtime:'Protected my time'};
   const tiers=[
     {threshold:1,items:[
       {key:'water',label:'Water',fn:r=>H(r).water>0},
