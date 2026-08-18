@@ -1132,6 +1132,44 @@ Before tonight, two kinds of "flat" scoring existed inside categories, and only 
 
 ---
 
+## SESSION LOG — 2026-08-17, continued (splash screen — designed, built, then deliberately removed)
+
+**Opening splash screen — built end to end, then explicitly reverted at the user's request ("we close like that for now").** Recorded in full because the generated assets remain on disk, unreferenced, and the whole design process is worth not re-deriving if this gets picked up again later.
+
+**Investigation phase:** confirmed a real Trading Journal project (`Projects/TradingJournal/index.html`) has its own working splash — fixed 1500ms display, a `.splash-line` expanding-width animation, `.hide` class + opacity fade + `display:none` teardown, and a clean rule for avoiding a Face ID conflict (splash is skipped entirely when Face ID is enabled; the lock screen replaces it rather than stacking). This became the mechanical template. Confirmed 3 logo asset variants existed in the folder; `-825a1b` (the one already in the header) was chosen for consistency over the more "cinematic" `-09640a` galaxy variant.
+
+**Logo artwork process — several real iterations, worth recording the mistakes as much as the outcome:**
+1. First built a static PNG manually (Python/PIL) by cropping the user's own uploaded logo photo down to just the inner icon (removing an outer ring), adding "Life OS" text below in a placeholder font. This was a real, usable asset but got superseded once the user pivoted to generating the look via Higgsfield instead — worth remembering this manual-edit approach exists as a fallback technique if AI generation ever stalls.
+2. Higgsfield (image-to-video AI) prompts were written using its own actual documented conventions (short, direct motion-only sentences; lock color/lighting into the image prompt, not the motion prompt, to avoid flicker) — confirmed via web search before writing anything, not assumed.
+3. **Real mistake made and owned:** a black-glossy-ribbon regeneration prompt dropped the "Life OS" text instruction entirely, and the result also added an unwanted dark plate/background behind the icon that hadn't been asked for. Caught by the user, corrected in the next prompt (no background/plate, explicit text line restored).
+4. **Real scope misread, corrected directly by the user:** when asked to reverse-engineer 3 separate style references (red/navy glossy, silver-metal+teal-glow, black/orange paper-cut), the first attempt collapsed them all toward one black interpretation instead of producing three distinct color-accurate versions. Corrected: three separate prompts, each keeping its own reference's actual colors and finish, not converged to match the rest of the app's palette — the app-color-matching only needed to happen AFTER a style was chosen, not during exploration.
+5. Final chosen still: the silver-brushed-metal icon with glowing cyan-teal light between the ribbon overlaps, "Life OS" in matching brushed-silver/teal-glow text. Motion prompt (rings rotate slowly clockwise revealing more teal glow, gentle glow pulse, static camera, explicit fade-in first 0.4s + fade-out last 0.4s, 3s total duration) generated a real 960×960 H.264 clip, 24fps, ~3.04s, 1.96MB, fades already baked into the footage.
+
+**Build decision — hybrid delivery, confirmed by the user as the right tradeoff:** first-time visitors see the lightweight PNG with a CSS scale-in + glow-pulse (near-instant, no extra download weight); the real MP4 only plays on return visits once the service worker has actually cached it in the background — detected via `caches.match()` against the real cache, not a localStorage flag (a flag could stay true even after a cache eviction, which would be a lie). Both PNG and MP4 assets got moved into the correct inner deploy repo (`LifeOS\LifeOS\`), and `sw.js`'s cache version was bumped so the new precache entry actually took effect for existing installs.
+
+**Reverted, cleanly, same night:** user decided against keeping the splash for now. Removal was symmetrical and careful — the `#splash` element, its CSS, and the boot IIFE were all removed, the boot line restored to the bare original `checkFaceIdLock(doInit);`, the MP4 reference removed from `sw.js`'s precache list, and the cache version bumped again (so existing installs actually revert too, not just fresh ones) — but **the PNG and MP4 asset files themselves were deliberately left on disk, untouched**, specifically so this doesn't need regenerating from scratch if the splash idea comes back later. Verified via Playwright that the app now loads straight to Home with zero delay, and Face ID behavior is confirmed unchanged.
+
+---
+
+## SESSION LOG — 2026-08-18 (Growth content redesign — brainstorm in progress, not built)
+
+**Real, honest signal from actual daily use: Growth is still the least-visited category**, even after the full rebuild (57-item menu, Reading, Meditation, Mood/Energy, Growth Report) from the prior session. User's own diagnosis, confirmed directly: the problem is content, not the visuals/report infrastructure — and specifically BOTH volume (57 items is too much to scan) AND relevance (most of it reads generic, not personal) at once, not just one or the other.
+
+**Explicit scope for this redesign:** keep everything already built — the tap-to-select menu UI, the Growth Report (consistency ring, per-group hit-rate bars, top-items list, Mood & Energy trend), Reading, Meditation, Mood/Energy — none of that is being touched. This is purely a content question: which items actually belong in the 57-item menu.
+
+**Direction being explored:** returning to a much smaller, personally-grounded starting set instead of the broad public-template-style list. Earlier in the prior session (2026-08-17), before the public-template reframing pulled the list toward genericness, a tight 10-item list was proposed and grounded directly in things the user has shared about himself (fear of approaching/acting, staying loyal past reason instead of setting boundaries, indirect communication, wanting to be the one who breaks an isolation pattern across generations):
+
+**Frame with women · Initiated instead of waited · Did something despite fear · Eye contact and presence · Set a boundary · Said the direct thing · Reached out to someone · Impulse control · Naming emotion before reacting · Strict with myself**
+
+**Current status — genuinely mid-conversation, nothing decided yet:**
+- User wants this done as a real back-and-forth brainstorm, explicitly NOT jumping to a build prompt — his words: "this is my Life documenting and I am building a journal to help me improve so we need a conversation to explain to you what would help me in this category." Treat this as a personal, exploratory conversation, not a spec-gathering exercise.
+- User confirmed he wants to keep a few specific items from the current 57 alongside whatever new personal set emerges, but has NOT yet named which ones — don't assume, ask him to name them when this resumes.
+- The conversation had just reached the actual open question — "what's actually been on your mind lately, when you think about the person you're trying to become" — when the chat hit its image limit and needed to move to a new conversation. **The user has not yet answered this question.** Pick up exactly here, don't re-ask the framing, just continue listening for his answer.
+
+**Nothing has been built or changed in index.html for this yet** — this is 100% still in the discussion phase.
+
+---
+
 ## LIVE URL
 
 **https://davyduction-web.github.io/LifeOS** — confirmed working by
@@ -1164,14 +1202,18 @@ for Add to Home Screen and any future sharing/testing.
 
 9. **Finance scoring still flat/binary, by deliberate choice.** Five real redesign options are on record (see SCORING METHODOLOGY section) — revisit only if the user brings it up again, don't assume which option without asking fresh.
 
+10. **Splash screen assets exist on disk but are NOT wired in.** Both `hf_20260817_173035_....png` and `hf_20260817_174527_....mp4` (silver-metal + teal-glow "Life OS" logo reveal) sit in `LifeOS\LifeOS\Media\`, fully generated and previously proven working in a hybrid PNG-first/video-on-return build — but the whole splash feature was deliberately reverted the same night. If this comes back, the design/build work doesn't need redoing, see the dedicated session log entry above.
+
+11. **Growth content redesign — actively in progress, mid-conversation, nothing built.** See the 2026-08-18 session log entry above for full context. Next step when resumed: the user has not yet answered "what's actually been on your mind lately, when you think about the person you're trying to become" — pick up there, real conversation not spec-gathering, and get the specific items he wants kept from the current 57 before building anything.
+
 Everything else from every design conversation and every locked decision
 across the whole project history through 2026-08-17 is built, deployed, and confirmed.
-See all six 2026-08-15/16/17 session log entries above, plus the SCORING METHODOLOGY
+See all seven 2026-08-15/16/17 session log entries above, plus the SCORING METHODOLOGY
 section, for everything built.
 
 ---
 
-*Last updated: 2026-08-17 (Convergence widget rebuild, FAB fixes, Faith/Music/Health scoring redesign — all hand-verified, Home calendar threshold coloring, Review tab full rebuild: radar + weekly grid + trend-lines + per-category target bars + Music Pipeline funnel)*
+*Last updated: 2026-08-17, closing (splash screen designed, built, verified, then deliberately reverted at user's request — assets kept on disk for later. Session closed clean: instant boot restored, no open bugs.)*
 
 ---
 

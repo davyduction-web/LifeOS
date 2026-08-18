@@ -327,8 +327,48 @@ const GROWTH_ITEMS = [
   'learned','reflectedmistake','hardquestion','changedmind','tookfeedback','rehearsal',
   'tookrespons','madedecision','spokegroup','tooklead','delegated','protectedtime'
 ];
+// NEW FORMAT — rep counters (target 50 each)
+const GR_REPS_KEYS = ['sindangiza','ndiprofitable','ndiumukire','ngirapatience','ntamikino','singirabwoba','sindyainzara','nubaha','mvugamacye','nkoravuba','mvugiraho'];
+const GR_REPS_LABELS = {
+  sindangiza:'SINDANGIZA VUBA',ndiprofitable:'NDI PROFITABLE',ndiumukire:'NDI UMUKIRE',
+  ngirapatience:'NGIRA PATIENCE',ntamikino:'NTAMIKINO NGIRA',singirabwoba:'SINGIRA UBWOBA',
+  sindyainzara:'SINDYA INZARA',nubaha:'NUBAHA AMATEGEKO YANJYE',mvugamacye:'MVUGA MACYE',
+  nkoravuba:'NKORA VUBA',mvugiraho:'MVUGIRA AHO'
+};
+const GR_REPS_TARGET = 50;
+// NEW FORMAT — yes/no checks (16 standard + 6 double-listed with reps)
+const GR_CHK_KEYS = [
+  'gc_toldtruth','gc_stoppedlying','gc_wasdirect','gc_removedfear','gc_noweed','gc_nocigarette',
+  'gc_eyecontact','gc_noticedreaction','gc_pausedbefore','gc_nameemotion','gc_impulse',
+  'gc_calmunder','gc_satwith','gc_words','gc_delayedgrat','gc_metacognition',
+  'gc_singirabwoba','gc_sindyainzara','gc_nubaha','gc_mvugamacye','gc_nkoravuba','gc_mvugiraho'
+];
+const GR_CHK_LABELS = {
+  gc_toldtruth:'Told the Truth',gc_stoppedlying:'Stopped Lying',gc_wasdirect:'Was Direct when Addressing People',
+  gc_removedfear:'Removed Fear',gc_noweed:'No Weed Today',gc_nocigarette:'No Cigarette Today',
+  gc_eyecontact:'Eye contact and presence',gc_noticedreaction:'Noticed my reaction before acting',
+  gc_pausedbefore:'Paused before responding',gc_nameemotion:'Named emotion before reacting',
+  gc_impulse:'Impulse control',gc_calmunder:'Stayed calm under pressure',gc_satwith:'Sat with discomfort',
+  gc_words:'Economy of words',gc_delayedgrat:'Delayed gratification',gc_metacognition:'Metacognition',
+  gc_singirabwoba:'SINGIRA UBWOBA',gc_sindyainzara:'SINDYA INZARA',gc_nubaha:'NUBAHA AMATEGEKO YANJYE',
+  gc_mvugamacye:'MVUGA MACYE',gc_nkoravuba:'NKORA VUBA',gc_mvugiraho:'MVUGIRA AHO'
+};
 function growthScore(d){
-  let c=0; GROWTH_ITEMS.forEach(k=>{ if(d.growth[k]) c++; });
+  const g = d.growth || {};
+  // New format: has reps or checks sub-objects
+  if(g.reps || g.checks){
+    const reps = g.reps || {};
+    const chks = g.checks || {};
+    let pts = 0;
+    // Reps: each key scores proportionally to target (capped at 1.0)
+    GR_REPS_KEYS.forEach(k=>{ pts += Math.min((reps[k]||0)/GR_REPS_TARGET, 1); });
+    // Checks: each yes = 1 point
+    GR_CHK_KEYS.forEach(k=>{ if(chks[k]==='yes') pts++; });
+    const total = GR_REPS_KEYS.length + GR_CHK_KEYS.length;
+    return Math.round((pts / total) * 100);
+  }
+  // Old format: flat booleans
+  let c=0; GROWTH_ITEMS.forEach(k=>{ if(g[k]) c++; });
   if(d.reading && (d.reading.sessions||[]).length > 0) c++;
   if(d.meditation && (d.meditation.sessions||[]).length > 0) c++;
   return Math.round((c/(GROWTH_ITEMS.length+2))*100);
@@ -1278,7 +1318,7 @@ function convergenceClusterHtml(convCount, loggedCount, hitRates){
   svg+='</svg>';
 
   const dayWord=loggedCount===1?'DAY':'DAYS';
-  const sub1='<div style="text-align:center;font-family:var(--mono);font-size:9px;color:var(--mute);letter-spacing:0.04em;margin-top:5px">CENTER = DAYS WITH 3+ CATS ≥80</div>';
+  const sub1='<div style="text-align:center;font-family:var(--mono);font-size:9px;color:var(--mute);letter-spacing:0.04em;margin-top:5px">CENTER = DAYS WITH 3+ CATS ≥70</div>';
   const sub2='<div style="text-align:center;font-family:var(--mono);font-size:9px;color:var(--mute);letter-spacing:0.04em;margin-top:2px">'+loggedCount+' '+dayWord+' LOGGED</div>';
   return '<div style="padding:4px 0">'+svg+sub1+sub2+'</div>';
 }
@@ -1526,9 +1566,18 @@ function openDayDetail(dateStr){
   }
 
   html += '<div style="font-family:var(--mono);font-size:9px;color:var(--growth);letter-spacing:1px;margin:14px 0 6px">GROWTH</div>';
-  const growthLabels = {eyecontact:'Eye contact and presence',posture:'Posture check',spokefirst:'Spoke first',heldsilence:'Held comfortable silence',stayedconvo:'Stayed in the conversation',approached:'Approached someone new',smiledstranger:'Smiled at a stranger',heldground:'Held ground under pressure',normshrink:"Didn't shrink in group",frame:'Frame with women',noticedreaction:'Noticed my reaction before acting',pausedbefore:'Paused before responding',nameemotion:'Named emotion before reacting',impulse:'Impulse control',letgo:'Let go of something',calmunder:'Stayed calm under pressure',notpersonal:"Didn't take it personally",satwith:'Sat with discomfort',fear:'Did something despite fear',initiated:'Initiated instead of waited',askedwanted:'Asked for what I wanted',tookrisk:'Took a calculated risk',hardercall:'Made the harder call',saidyes:'Said yes to something scary',confronted:'Confronted something avoided',setboundary:'Set a boundary',saidno:'Said no and held it',words:'Economy of words',toldtruth:'Told the truth directly',askedneeded:'Asked for what I needed',endedit:'Ended a conversation cleanly',keptcommit:'Kept a commitment',finishedit:'Finished what I started',nodistract:'Worked without distraction',stucktoplan:'Stuck to the plan',didthing:'Did the thing I was avoiding',delayedgrat:'Delayed gratification',showedup:"Showed up when I didn't want to",strictself:'Strict with myself',reachedout:'Reached out to someone',listening:'Active listening',appreciated:'Expressed genuine appreciation',repaired:'Repaired a rupture',fullattention:'Gave full attention',checkedin:'Checked in on someone',learned:'Learned something new',reflectedmistake:'Reflected on a mistake',hardquestion:'Asked myself a hard question',changedmind:'Changed my mind with evidence',tookfeedback:'Took feedback without defensiveness',rehearsal:'Mental rehearsal',tookrespons:'Took responsibility',madedecision:'Made a clear decision',spokegroup:'Spoke up in a group',tooklead:'Took the lead',delegated:'Delegated effectively',protectedtime:'Protected my time'};
-  const growthDone = Object.keys(growthLabels).filter(k=>rec.growth[k]).map(k=>growthLabels[k]);
-  html += '<div style="font-size:11px;color:var(--text)">'+(growthDone.length?growthDone.join(', '):'Nothing logged')+'</div>';
+  const _g = rec.growth || {};
+  if(_g.reps || _g.checks){
+    const _reps = _g.reps || {}, _chks = _g.checks || {};
+    const repLines = GR_REPS_KEYS.filter(k=>(_reps[k]||0)>0).map(k=>GR_REPS_LABELS[k]+': '+_reps[k]);
+    const chkLines = GR_CHK_KEYS.filter(k=>_chks[k]==='yes').map(k=>GR_CHK_LABELS[k]);
+    const allLines = [...repLines,...chkLines];
+    html += '<div style="font-size:11px;color:var(--text)">'+(allLines.length?allLines.join(', '):'Nothing logged')+'</div>';
+  } else {
+    const growthLabels = {eyecontact:'Eye contact and presence',posture:'Posture check',spokefirst:'Spoke first',heldsilence:'Held comfortable silence',stayedconvo:'Stayed in the conversation',approached:'Approached someone new',smiledstranger:'Smiled at a stranger',heldground:'Held ground under pressure',normshrink:"Didn't shrink in group",frame:'Frame with women',noticedreaction:'Noticed my reaction before acting',pausedbefore:'Paused before responding',nameemotion:'Named emotion before reacting',impulse:'Impulse control',letgo:'Let go of something',calmunder:'Stayed calm under pressure',notpersonal:"Didn't take it personally",satwith:'Sat with discomfort',fear:'Did something despite fear',initiated:'Initiated instead of waited',askedwanted:'Asked for what I wanted',tookrisk:'Took a calculated risk',hardercall:'Made the harder call',saidyes:'Said yes to something scary',confronted:'Confronted something avoided',setboundary:'Set a boundary',saidno:'Said no and held it',words:'Economy of words',toldtruth:'Told the truth directly',askedneeded:'Asked for what I needed',endedit:'Ended a conversation cleanly',keptcommit:'Kept a commitment',finishedit:'Finished what I started',nodistract:'Worked without distraction',stucktoplan:'Stuck to the plan',didthing:'Did the thing I was avoiding',delayedgrat:'Delayed gratification',showedup:"Showed up when I didn't want to",strictself:'Strict with myself',reachedout:'Reached out to someone',listening:'Active listening',appreciated:'Expressed genuine appreciation',repaired:'Repaired a rupture',fullattention:'Gave full attention',checkedin:'Checked in on someone',learned:'Learned something new',reflectedmistake:'Reflected on a mistake',hardquestion:'Asked myself a hard question',changedmind:'Changed my mind with evidence',tookfeedback:'Took feedback without defensiveness',rehearsal:'Mental rehearsal',tookrespons:'Took responsibility',madedecision:'Made a clear decision',spokegroup:'Spoke up in a group',tooklead:'Took the lead',delegated:'Delegated effectively',protectedtime:'Protected my time'};
+    const growthDone = Object.keys(growthLabels).filter(k=>_g[k]).map(k=>growthLabels[k]);
+    html += '<div style="font-size:11px;color:var(--text)">'+(growthDone.length?growthDone.join(', '):'Nothing logged')+'</div>';
+  }
 
   let _actions = '<div class="modal-actions">';
   if(dateStr !== TODAY) _actions += '<button class="btn-ghost" onclick="enterEditMode(\''+dateStr+'\')">Edit this day</button>';
@@ -1617,11 +1666,19 @@ function compareDayHtml(tab, color){
   }
 
   else if(tab==='growth'){
-    const tg=day.growth;
+    const tg=day.growth||{};
     const rg=refRec&&refRec.growth?refRec.growth:null;
-    rows+=cmpRow('Items hit',
-      rg?'<span style="color:'+color+'">'+GROWTH_ITEMS.filter(k=>rg[k]).length+'/'+GROWTH_ITEMS.length+'</span>':'<span style="color:var(--mute)">--</span>',
-      '<span style="color:'+color+'">'+GROWTH_ITEMS.filter(k=>tg[k]).length+'/'+GROWTH_ITEMS.length+'</span>');
+    const _growthSummary=g=>{
+      if(!g) return '<span style="color:var(--mute)">--</span>';
+      if(g.reps||g.checks){
+        const reps=g.reps||{}, chks=g.checks||{};
+        const repPts=GR_REPS_KEYS.reduce((s,k)=>s+Math.min((reps[k]||0)/GR_REPS_TARGET,1),0);
+        const chkPts=GR_CHK_KEYS.filter(k=>chks[k]==='yes').length;
+        return '<span style="color:'+color+'">'+(repPts+chkPts).toFixed(1)+'/'+(GR_REPS_KEYS.length+GR_CHK_KEYS.length)+'</span>';
+      }
+      return '<span style="color:'+color+'">'+GROWTH_ITEMS.filter(k=>g[k]).length+'/'+GROWTH_ITEMS.length+'</span>';
+    };
+    rows+=cmpRow('Items hit', _growthSummary(rg), _growthSummary(tg));
   }
 
   const ab='font-family:var(--mono);font-size:13px;padding:1px 8px;border-radius:4px;border:1px solid var(--border);background:transparent;cursor:pointer;';
@@ -1872,9 +1929,9 @@ function renderHome(){
     convKeys=Object.keys(convAll).filter(k=>k.startsWith(monthPrefix));
   }
   const convRangeLabel=convPeriod==='daily'?'TODAY':convPeriod==='weekly'?'THIS WEEK':'THIS MONTH';
-  const convCount=convKeys.filter(ds=>{ const r=convAll[ds]; return [faithScore(r),healthScore(r),musicScore(r),financeScore(r),growthScore(r)].filter(s=>s>=80).length>=3; }).length;
+  const convCount=convKeys.filter(ds=>{ const r=convAll[ds]; return [faithScore(r),healthScore(r),musicScore(r),financeScore(r),growthScore(r)].filter(s=>s>=70).length>=3; }).length;
   const convScorers=[faithScore,healthScore,musicScore,financeScore,growthScore];
-  const convHitRates=convScorers.map(fn=>convKeys.length?convKeys.filter(ds=>fn(convAll[ds])>=80).length/convKeys.length:0);
+  const convHitRates=convScorers.map(fn=>convKeys.length?convKeys.reduce((sum,ds)=>sum+fn(convAll[ds]),0)/convKeys.length/100:0);
   const convPeriodSel='<div class="btn-group" style="margin-bottom:8px">'
     +'<button class="opt-btn conv-period-btn'+(convPeriod==='daily'?' sel':'')+'" data-conv-period="daily">Daily</button>'
     +'<button class="opt-btn conv-period-btn'+(convPeriod==='weekly'?' sel':'')+'" data-conv-period="weekly">Weekly</button>'
@@ -3924,47 +3981,61 @@ function renderGrowthReport(s){
     html += `</div>`;
   }
 
-  // ── PHASE 2: PER-GROUP HIT-RATE BARS ──
+  // ── PHASE 2: REPS AVERAGES + CHECKS HIT RATE ──
   if(N>0){
-    const grpDefs=[
-      ['PRESENCE & SOCIAL',['eyecontact','posture','spokefirst','heldsilence','stayedconvo','approached','smiledstranger','heldground','normshrink','frame']],
-      ['EMOTIONAL CONTROL',['noticedreaction','pausedbefore','nameemotion','impulse','letgo','calmunder','notpersonal','satwith']],
-      ['COURAGE & INITIATIVE',['fear','initiated','askedwanted','tookrisk','hardercall','saidyes','confronted']],
-      ['BOUNDARIES & DIRECT',['setboundary','saidno','words','toldtruth','askedneeded','endedit']],
-      ['DISCIPLINE',['keptcommit','finishedit','nodistract','stucktoplan','didthing','delayedgrat','showedup','strictself']],
-      ['RELATIONSHIPS',['reachedout','listening','appreciated','repaired','fullattention','checkedin']],
-      ['MIND & REFLECTION',['learned','reflectedmistake','hardquestion','changedmind','tookfeedback','rehearsal']],
-      ['LEADERSHIP',['tookrespons','madedecision','spokegroup','tooklead','delegated','protectedtime']]
-    ];
-    html += sectionLabel(`GROUPS — ${pLabel}`,'var(--growth)');
-    html += `<div class="card" style="padding:10px 14px">`;
-    grpDefs.forEach(([grpName,keys],gi)=>{
-      let hits=0;
-      periodRecs.forEach(r=>{ if(r.growth) keys.forEach(k=>{ if(r.growth[k]) hits++; }); });
-      const rate=Math.round(hits/(keys.length*N)*100);
-      html += `<div style="margin-bottom:${gi<grpDefs.length-1?10:0}px">`;
-      html += `<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px"><span style="font-family:var(--mono);font-size:8px;color:var(--mute)">${grpName}</span><span style="font-family:var(--mono);font-size:9px;color:var(--growth)">${rate}%</span></div>`;
-      html += `<div style="height:4px;background:var(--track-bg);border-radius:2px;overflow:hidden"><div style="height:100%;width:${rate}%;background:var(--growth);border-radius:2px"></div></div>`;
-      html += `</div>`;
-    });
-    html += `</div>`;
+    // Split records by format
+    const newRecs = periodRecs.filter(r=>r.growth&&(r.growth.reps||r.growth.checks));
+    const oldRecs = periodRecs.filter(r=>r.growth&&!r.growth.reps&&!r.growth.checks);
 
-    // ── TOP 10 ITEMS ──
-    const GL={eyecontact:'Eye contact',posture:'Posture',spokefirst:'Spoke first',heldsilence:'Held silence',stayedconvo:'Stayed in convo',approached:'Approached',smiledstranger:'Smiled stranger',heldground:'Held ground',normshrink:'No shrinking',frame:'Frame',noticedreaction:'Noticed reaction',pausedbefore:'Paused first',nameemotion:'Named emotion',impulse:'Impulse ctrl',letgo:'Let go',calmunder:'Stayed calm',notpersonal:'Not personal',satwith:'Sat with it',fear:'Despite fear',initiated:'Initiated',askedwanted:'Asked wanted',tookrisk:'Took risk',hardercall:'Harder call',saidyes:'Said yes',confronted:'Confronted',setboundary:'Set boundary',saidno:'Said no',words:'Words economy',toldtruth:'Told truth',askedneeded:'Asked needed',endedit:'Ended it',keptcommit:'Kept commit',finishedit:'Finished it',nodistract:'No distraction',stucktoplan:'Stuck to plan',didthing:'Just did it',delayedgrat:'Delayed grat',showedup:'Showed up',strictself:'Strict self',reachedout:'Reached out',listening:'Listening',appreciated:'Expressed thanks',repaired:'Repaired',fullattention:'Full attention',checkedin:'Checked in',learned:'Learned',reflectedmistake:'Reflected mistake',hardquestion:'Hard question',changedmind:'Changed mind',tookfeedback:'Took feedback',rehearsal:'Rehearsal',tookrespons:'Took respons',madedecision:'Made decision',spokegroup:'Spoke in group',tooklead:'Took lead',delegated:'Delegated',protectedtime:'Protected time'};
-    const hitCounts={};
-    GROWTH_ITEMS.forEach(k=>{ hitCounts[k]=periodRecs.filter(r=>r.growth&&r.growth[k]).length; });
-    const top10=GROWTH_ITEMS.slice().sort((a,b)=>hitCounts[b]-hitCounts[a]).filter(k=>hitCounts[k]>0).slice(0,10);
-    if(top10.length>0){
-      const maxHit=hitCounts[top10[0]]||1;
-      html += sectionLabel(`TOP ITEMS — ${pLabel}`,'var(--growth)');
+    if(newRecs.length>0){
+      // Reps: avg count per key
+      html += sectionLabel(`AFFIRMATIONS AVG — ${pLabel}`,'var(--growth)');
       html += `<div class="card" style="padding:10px 14px">`;
-      top10.forEach((k,i)=>{
-        const cnt=hitCounts[k];
-        html += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:${i<top10.length-1?8:0}px">`;
-        html += `<span style="font-family:var(--mono);font-size:8px;color:var(--mute);min-width:14px;text-align:right">${i+1}</span>`;
-        html += `<span style="font-size:11px;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${GL[k]||k}</span>`;
-        html += `<div style="width:60px;height:4px;background:var(--track-bg);border-radius:2px;flex-shrink:0"><div style="height:100%;width:${Math.round(cnt/maxHit*100)}%;background:var(--growth);border-radius:2px"></div></div>`;
-        html += `<span style="font-family:var(--mono);font-size:9px;color:var(--growth);min-width:24px;text-align:right">${cnt}d</span>`;
+      GR_REPS_KEYS.forEach((k,i)=>{
+        const avg=newRecs.reduce((s,r)=>s+((r.growth.reps&&r.growth.reps[k])||0),0)/newRecs.length;
+        const pct=Math.min(avg/GR_REPS_TARGET,1);
+        html += `<div style="margin-bottom:${i<GR_REPS_KEYS.length-1?10:0}px">`;
+        html += `<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px"><span style="font-family:var(--mono);font-size:8px;color:var(--mute)">${GR_REPS_LABELS[k]}</span><span style="font-family:var(--mono);font-size:9px;color:var(--growth)">${avg.toFixed(1)}</span></div>`;
+        html += `<div style="height:4px;background:var(--track-bg);border-radius:2px;overflow:hidden"><div style="height:100%;width:${Math.round(pct*100)}%;background:var(--growth);border-radius:2px"></div></div>`;
+        html += `</div>`;
+      });
+      html += `</div>`;
+
+      // Checks: hit rate per key
+      html += sectionLabel(`CHECKS HIT RATE — ${pLabel}`,'var(--growth)');
+      html += `<div class="card" style="padding:10px 14px">`;
+      GR_CHK_KEYS.forEach((k,i)=>{
+        const hits=newRecs.filter(r=>r.growth.checks&&r.growth.checks[k]==='yes').length;
+        const rate=Math.round(hits/newRecs.length*100);
+        html += `<div style="margin-bottom:${i<GR_CHK_KEYS.length-1?10:0}px">`;
+        html += `<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px"><span style="font-family:var(--mono);font-size:8px;color:var(--mute)">${GR_CHK_LABELS[k]}</span><span style="font-family:var(--mono);font-size:9px;color:var(--growth)">${rate}%</span></div>`;
+        html += `<div style="height:4px;background:var(--track-bg);border-radius:2px;overflow:hidden"><div style="height:100%;width:${rate}%;background:var(--growth);border-radius:2px"></div></div>`;
+        html += `</div>`;
+      });
+      html += `</div>`;
+    }
+
+    if(oldRecs.length>0){
+      // Legacy: 8-group bars
+      const grpDefs=[
+        ['PRESENCE & SOCIAL',['eyecontact','posture','spokefirst','heldsilence','stayedconvo','approached','smiledstranger','heldground','normshrink','frame']],
+        ['EMOTIONAL CONTROL',['noticedreaction','pausedbefore','nameemotion','impulse','letgo','calmunder','notpersonal','satwith']],
+        ['COURAGE & INITIATIVE',['fear','initiated','askedwanted','tookrisk','hardercall','saidyes','confronted']],
+        ['BOUNDARIES & DIRECT',['setboundary','saidno','words','toldtruth','askedneeded','endedit']],
+        ['DISCIPLINE',['keptcommit','finishedit','nodistract','stucktoplan','didthing','delayedgrat','showedup','strictself']],
+        ['RELATIONSHIPS',['reachedout','listening','appreciated','repaired','fullattention','checkedin']],
+        ['MIND & REFLECTION',['learned','reflectedmistake','hardquestion','changedmind','tookfeedback','rehearsal']],
+        ['LEADERSHIP',['tookrespons','madedecision','spokegroup','tooklead','delegated','protectedtime']]
+      ];
+      html += sectionLabel(`GROUPS (legacy) — ${pLabel}`,'var(--growth)');
+      html += `<div class="card" style="padding:10px 14px">`;
+      grpDefs.forEach(([grpName,keys],gi)=>{
+        let hits=0;
+        oldRecs.forEach(r=>{ keys.forEach(k=>{ if(r.growth[k]) hits++; }); });
+        const rate=Math.round(hits/(keys.length*oldRecs.length)*100);
+        html += `<div style="margin-bottom:${gi<grpDefs.length-1?10:0}px">`;
+        html += `<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px"><span style="font-family:var(--mono);font-size:8px;color:var(--mute)">${grpName}</span><span style="font-family:var(--mono);font-size:9px;color:var(--growth)">${rate}%</span></div>`;
+        html += `<div style="height:4px;background:var(--track-bg);border-radius:2px;overflow:hidden"><div style="height:100%;width:${rate}%;background:var(--growth);border-radius:2px"></div></div>`;
         html += `</div>`;
       });
       html += `</div>`;
@@ -4084,17 +4155,6 @@ function renderGrowth(){
   const s = document.getElementById('s-growth');
   if(growthReportOpen){ renderGrowthReport(s); return; }
   const g = day.growth;
-  const GROWTH_GROUPS = [
-    ['PRESENCE & SOCIAL CONFIDENCE',[['eyecontact','Eye contact'],['posture','Posture'],['spokefirst','Spoke first'],['heldsilence','Held silence'],['stayedconvo','Stayed in convo'],['approached','Approached'],['smiledstranger','Smiled stranger'],['heldground','Held ground'],['normshrink','No shrinking'],['frame','Frame']]],
-    ['EMOTIONAL CONTROL & AWARENESS',[['noticedreaction','Noticed reaction'],['pausedbefore','Paused first'],['nameemotion','Named emotion'],['impulse','Impulse ctrl'],['letgo','Let go'],['calmunder','Stayed calm'],['notpersonal','Not personal'],['satwith','Sat with it']]],
-    ['COURAGE & INITIATIVE',[['fear','Despite fear'],['initiated','Initiated'],['askedwanted','Asked wanted'],['tookrisk','Took risk'],['hardercall','Harder call'],['saidyes','Said yes'],['confronted','Confronted']]],
-    ['BOUNDARIES & DIRECT COMMUNICATION',[['setboundary','Set boundary'],['saidno','Said no'],['words','Words economy'],['toldtruth','Told truth'],['askedneeded','Asked needed'],['endedit','Ended it']]],
-    ['DISCIPLINE & FOLLOW-THROUGH',[['keptcommit','Kept commit'],['finishedit','Finished it'],['nodistract','No distraction'],['stucktoplan','Stuck to plan'],['didthing','Just did it'],['delayedgrat','Delayed grat'],['showedup','Showed up'],['strictself','Strict self']]],
-    ['RELATIONSHIPS & CONNECTION',[['reachedout','Reached out'],['listening','Listening'],['appreciated','Expressed thanks'],['repaired','Repaired'],['fullattention','Full attention'],['checkedin','Checked in']]],
-    ['MIND, REFLECTION & GROWTH',[['learned','Learned'],['reflectedmistake','Reflected mistake'],['hardquestion','Hard question'],['changedmind','Changed mind'],['tookfeedback','Took feedback'],['rehearsal','Rehearsal']]],
-    ['LEADERSHIP & OWNERSHIP',[['tookrespons','Took respons'],['madedecision','Made decision'],['spokegroup','Spoke in group'],['tooklead','Took lead'],['delegated','Delegated'],['protectedtime','Protected time']]]
-  ];
-  const gFullLabels = {eyecontact:'Eye contact and presence',posture:'Posture check',spokefirst:'Spoke first',heldsilence:'Held comfortable silence',stayedconvo:'Stayed in the conversation',approached:'Approached someone new',smiledstranger:'Smiled at a stranger',heldground:'Held ground under pressure',normshrink:"Didn't shrink in group",frame:'Frame with women',noticedreaction:'Noticed my reaction before acting',pausedbefore:'Paused before responding',nameemotion:'Named emotion before reacting',impulse:'Impulse control',letgo:'Let go of something',calmunder:'Stayed calm under pressure',notpersonal:"Didn't take it personally",satwith:'Sat with discomfort',fear:'Did something despite fear',initiated:'Initiated instead of waited',askedwanted:'Asked for what I wanted',tookrisk:'Took a calculated risk',hardercall:'Made the harder call',saidyes:'Said yes to something scary',confronted:'Confronted something avoided',setboundary:'Set a boundary',saidno:'Said no and held it',words:'Economy of words',toldtruth:'Told the truth directly',askedneeded:'Asked for what I needed',endedit:'Ended a conversation cleanly',keptcommit:'Kept a commitment',finishedit:'Finished what I started',nodistract:'Worked without distraction',stucktoplan:'Stuck to the plan',didthing:'Did the thing I was avoiding',delayedgrat:'Delayed gratification',showedup:"Showed up when I didn't want to",strictself:'Strict with myself',reachedout:'Reached out to someone',listening:'Active listening',appreciated:'Expressed genuine appreciation',repaired:'Repaired a rupture',fullattention:'Gave full attention',checkedin:'Checked in on someone',learned:'Learned something new',reflectedmistake:'Reflected on a mistake',hardquestion:'Asked myself a hard question',changedmind:'Changed my mind with evidence',tookfeedback:'Took feedback without defensiveness',rehearsal:'Mental rehearsal',tookrespons:'Took responsibility',madedecision:'Made a clear decision',spokegroup:'Spoke up in a group',tooklead:'Took the lead',delegated:'Delegated effectively',protectedtime:'Protected my time'};
   let html = `<div style="display:flex;justify-content:flex-end;margin-bottom:8px">`+
     `<button class="btn-ghost" id="open-growth-report" style="border-color:var(--growth);color:var(--growth);padding:6px 14px;font-size:12px">Report →</button>`+
     `</div>`;
@@ -4155,14 +4215,53 @@ function renderGrowth(){
   }
   html += '</div>';
 
-  const grDone = GROWTH_ITEMS.filter(k=>g[k]).length;
-  html += '<div style="text-align:right;font-family:var(--mono);font-size:11px;color:var(--mute);margin-bottom:4px"><span style="color:var(--growth);font-weight:700">'+grDone+'</span>/'+GROWTH_ITEMS.length+'</div>';
-  GROWTH_GROUPS.forEach(gr=>{
-    html += sectionLabel(gr[0], 'var(--growth)');
-    html += '<div class="card" style="padding:10px 12px"><div style="display:flex;flex-wrap:wrap;gap:6px">'
-      +gr[1].map(x=>{const sel=!!g[x[0]];return '<button class="opt-btn growth-chip'+(sel?' sel':'')+'" data-yn-key="'+x[0]+'" data-yn-val="'+(sel?'no':'yes')+'" title="'+gFullLabels[x[0]]+'" style="flex:unset;min-width:0;padding:5px 10px'+(sel?';border-color:var(--growth)':'')+'">'+'<span style="font-size:10px">'+x[1]+'</span></button>';}).join('')
+  // ── SECTION 1: AFFIRMATIONS (REPS) ──
+  const reps = (g.reps||{});
+  const chks = (g.checks||{});
+  const totalRepPts = GR_REPS_KEYS.reduce((s,k)=>s+Math.min((reps[k]||0)/GR_REPS_TARGET,1),0);
+  const repPct = Math.round(totalRepPts/GR_REPS_KEYS.length*100);
+  html += sectionLabel('AFFIRMATIONS (REPS)', 'var(--growth)');
+  html += '<div class="card" style="padding:10px 14px">';
+  html += '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px">'
+    +'<span style="font-family:var(--mono);font-size:8px;color:var(--mute)">TARGET: '+GR_REPS_TARGET+' EACH</span>'
+    +'<span style="font-family:var(--mono);font-size:9px;color:var(--growth)">'+repPct+'%</span>'
+    +'</div>';
+  GR_REPS_KEYS.forEach((k,i)=>{
+    const cnt = reps[k]||0;
+    const pct = Math.min(cnt/GR_REPS_TARGET,1);
+    html += '<div style="margin-bottom:'+(i<GR_REPS_KEYS.length-1?12:0)+'px">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">'
+      +'<span style="font-size:12px;color:var(--text)">'+GR_REPS_LABELS[k]+'</span>'
+      +'<div style="display:flex;align-items:center;gap:8px">'
+      +'<button data-rep-key="'+k+'" data-rep-delta="-1" style="background:none;border:1px solid var(--border);border-radius:50%;width:26px;height:26px;color:var(--mute);font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1">−</button>'
+      +'<span style="font-family:var(--mono);font-size:13px;color:var(--growth);min-width:24px;text-align:center">'+cnt+'</span>'
+      +'<button data-rep-key="'+k+'" data-rep-delta="1" style="background:none;border:1px solid var(--growth);border-radius:50%;width:26px;height:26px;color:var(--growth);font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1">+</button>'
       +'</div></div>';
+    html += '<div style="height:4px;background:var(--track-bg);border-radius:2px;overflow:hidden"><div style="height:100%;width:'+Math.round(pct*100)+'%;background:var(--growth);border-radius:2px;transition:width 0.2s"></div></div>';
+    html += '</div>';
   });
+  html += '</div>';
+
+  // ── SECTION 2: SITUATIONAL CHECKS ──
+  const totalChkHits = GR_CHK_KEYS.filter(k=>chks[k]==='yes').length;
+  html += sectionLabel('SITUATIONAL CHECKS', 'var(--growth)');
+  html += '<div class="card" style="padding:10px 14px">';
+  html += '<div style="text-align:right;font-family:var(--mono);font-size:9px;color:var(--mute);margin-bottom:8px"><span style="color:var(--growth)">'+totalChkHits+'</span>/'+GR_CHK_KEYS.length+'</div>';
+  GR_CHK_KEYS.forEach((k,i)=>{
+    const val = chks[k]||null;
+    const yesActive = val==='yes', noActive = val==='no';
+    html += '<div style="margin-bottom:'+(i<GR_CHK_KEYS.length-1?12:0)+'px">';
+    html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:'+(yesActive?6:0)+'px">'
+      +'<span style="font-size:12px;color:var(--text);flex:1">'+GR_CHK_LABELS[k]+'</span>'
+      +'<button data-chk-key="'+k+'" data-chk-val="yes" style="padding:4px 12px;border-radius:12px;font-size:11px;font-family:var(--mono);border:1px solid '+(yesActive?'var(--growth)':'var(--border)')+';background:'+(yesActive?'rgba(61,220,151,0.12)':'transparent')+';color:'+(yesActive?'var(--growth)':'var(--mute)')+';cursor:pointer">YES</button>'
+      +'<button data-chk-key="'+k+'" data-chk-val="no" style="padding:4px 12px;border-radius:12px;font-size:11px;font-family:var(--mono);border:1px solid '+(noActive?'var(--red)':'var(--border)')+';background:'+(noActive?'rgba(255,80,80,0.10)':'transparent')+';color:'+(noActive?'var(--red)':'var(--mute)')+';cursor:pointer">NO</button>'
+      +'</div>';
+    if(yesActive){
+      html += '<textarea class="input textarea" data-chk-note="'+k+'" placeholder="Optional note..." style="font-size:11px;padding:6px 8px;min-height:44px;resize:vertical">'+(chks[k+'_note']||'')+'</textarea>';
+    }
+    html += '</div>';
+  });
+  html += '</div>';
 
   // ── READING ──
   if(!day.reading) day.reading = {sessions:[], notes:''};
@@ -4336,6 +4435,29 @@ function renderGrowth(){
 
   s.querySelectorAll('[data-yn-key]').forEach(p=>{
     p.addEventListener('click', ()=>{ g[p.dataset.ynKey] = p.dataset.ynVal==='yes'; renderGrowth(); });
+  });
+
+  // Rep counter buttons
+  s.querySelectorAll('[data-rep-key]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      if(!g.reps) g.reps = {};
+      const k = btn.dataset.repKey;
+      const delta = parseInt(btn.dataset.repDelta);
+      g.reps[k] = Math.max(0, (g.reps[k]||0) + delta);
+      renderGrowth();
+    });
+  });
+
+  // Check yes/no buttons
+  s.querySelectorAll('[data-chk-key]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      if(!g.checks) g.checks = {};
+      const k = btn.dataset.chkKey;
+      const val = btn.dataset.chkVal;
+      // Toggle off if already selected
+      g.checks[k] = (g.checks[k]===val) ? null : val;
+      renderGrowth();
+    });
   });
 
   // Book tap → update modal
@@ -4529,6 +4651,11 @@ function renderGrowth(){
   document.getElementById('save-growth').addEventListener('click', ()=>{
     const notesEl=document.getElementById('growth-notes');
     if(notesEl) g.notes=notesEl.value;
+    // Persist check notes from visible textareas
+    s.querySelectorAll('[data-chk-note]').forEach(ta=>{
+      if(!g.checks) g.checks={};
+      g.checks[ta.dataset.chkNote+'_note'] = ta.value.trim()||null;
+    });
     saveDayNow();
   });
   patchAriaRoles(s);
@@ -4868,12 +4995,24 @@ function renderReview(){
   const wGrowthAvg = gDays.length ? Math.round(gDays.reduce((a,d)=>a+growthScore(d.rec),0)/gDays.length) : null;
   html += rr('Completion avg', wGrowthAvg!==null?wGrowthAvg+'%':'--','var(--growth)');
   if(gDays.length){
-    const gShort = {eyecontact:'Eye contact',posture:'Posture',spokefirst:'Spoke first',heldsilence:'Held silence',stayedconvo:'Stayed in convo',approached:'Approached',smiledstranger:'Smiled stranger',heldground:'Held ground',normshrink:'No shrinking',frame:'Frame',noticedreaction:'Noticed react',pausedbefore:'Paused first',nameemotion:'Named emotion',impulse:'Impulse ctrl',letgo:'Let go',calmunder:'Stayed calm',notpersonal:'Not personal',satwith:'Sat with it',fear:'Despite fear',initiated:'Initiated',askedwanted:'Asked wanted',tookrisk:'Took risk',hardercall:'Harder call',saidyes:'Said yes',confronted:'Confronted',setboundary:'Set boundary',saidno:'Said no',words:'Words economy',toldtruth:'Told truth',askedneeded:'Asked needed',endedit:'Ended it',keptcommit:'Kept commit',finishedit:'Finished it',nodistract:'No distraction',stucktoplan:'Stuck to plan',didthing:'Just did it',delayedgrat:'Delayed grat',showedup:'Showed up',strictself:'Strict self',reachedout:'Reached out',listening:'Listening',appreciated:'Expressed thanks',repaired:'Repaired',fullattention:'Full attention',checkedin:'Checked in',learned:'Learned',reflectedmistake:'Reflected mistake',hardquestion:'Hard question',changedmind:'Changed mind',tookfeedback:'Took feedback',rehearsal:'Rehearsal',tookrespons:'Took respons',madedecision:'Made decision',spokegroup:'Spoke in group',tooklead:'Took lead',delegated:'Delegated',protectedtime:'Protected time'};
-    const hitCounts = {};
-    GROWTH_ITEMS.forEach(k=>{ hitCounts[k]=gDays.filter(d=>d.rec.growth[k]).length; });
-    const sorted = GROWTH_ITEMS.slice().sort((a,b)=>hitCounts[b]-hitCounts[a]);
-    html += rr('Most consistent', gShort[sorted[0]]+' ('+hitCounts[sorted[0]]+'/'+gDays.length+'d)','var(--growth)');
-    html += rr('Needs work', gShort[sorted[sorted.length-1]]+' ('+hitCounts[sorted[sorted.length-1]]+'/'+gDays.length+'d)','var(--red)');
+    const newGDays = gDays.filter(d=>d.rec.growth.reps||d.rec.growth.checks);
+    const oldGDays = gDays.filter(d=>!d.rec.growth.reps&&!d.rec.growth.checks);
+    if(newGDays.length){
+      // Top rep key by avg count
+      const repAvgs = GR_REPS_KEYS.map(k=>({k, avg: newGDays.reduce((s,d)=>s+((d.rec.growth.reps&&d.rec.growth.reps[k])||0),0)/newGDays.length}));
+      repAvgs.sort((a,b)=>b.avg-a.avg);
+      if(repAvgs[0].avg>0) html += rr('Top affirmation', GR_REPS_LABELS[repAvgs[0].k]+' (avg '+repAvgs[0].avg.toFixed(1)+')','var(--growth)');
+      // Most checked YES
+      const chkHits = GR_CHK_KEYS.map(k=>({k, hits: newGDays.filter(d=>d.rec.growth.checks&&d.rec.growth.checks[k]==='yes').length}));
+      chkHits.sort((a,b)=>b.hits-a.hits);
+      if(chkHits[0].hits>0) html += rr('Most consistent check', GR_CHK_LABELS[chkHits[0].k]+' ('+chkHits[0].hits+'/'+newGDays.length+'d)','var(--growth)');
+    }
+    if(oldGDays.length){
+      const hitCounts = {};
+      GROWTH_ITEMS.forEach(k=>{ hitCounts[k]=oldGDays.filter(d=>d.rec.growth[k]).length; });
+      const sorted = GROWTH_ITEMS.slice().sort((a,b)=>hitCounts[b]-hitCounts[a]).filter(k=>hitCounts[k]>0);
+      if(sorted.length) html += rr('Legacy — most consistent', sorted[0]+' ('+hitCounts[sorted[0]]+'/'+oldGDays.length+'d)','var(--growth)');
+    }
   }
   html += '</div>';
 
@@ -4916,8 +5055,14 @@ function renderReview(){
     }
     const gDaysNa = wWithData.filter(d=>d.rec.growth);
     if(gDaysNa.length){
-      const gShortNa = {eyecontact:'Eye contact',posture:'Posture',spokefirst:'Spoke first',heldsilence:'Held silence',stayedconvo:'Stayed in convo',approached:'Approached',smiledstranger:'Smiled stranger',heldground:'Held ground',normshrink:'No shrinking',frame:'Frame',noticedreaction:'Noticed react',pausedbefore:'Paused first',nameemotion:'Named emotion',impulse:'Impulse ctrl',letgo:'Let go',calmunder:'Stayed calm',notpersonal:'Not personal',satwith:'Sat with it',fear:'Despite fear',initiated:'Initiated',askedwanted:'Asked wanted',tookrisk:'Took risk',hardercall:'Harder call',saidyes:'Said yes',confronted:'Confronted',setboundary:'Set boundary',saidno:'Said no',words:'Words economy',toldtruth:'Told truth',askedneeded:'Asked needed',endedit:'Ended it',keptcommit:'Kept commit',finishedit:'Finished it',nodistract:'No distraction',stucktoplan:'Stuck to plan',didthing:'Just did it',delayedgrat:'Delayed grat',showedup:'Showed up',strictself:'Strict self',reachedout:'Reached out',listening:'Listening',appreciated:'Expressed thanks',repaired:'Repaired',fullattention:'Full attention',checkedin:'Checked in',learned:'Learned',reflectedmistake:'Reflected mistake',hardquestion:'Hard question',changedmind:'Changed mind',tookfeedback:'Took feedback',rehearsal:'Rehearsal',tookrespons:'Took respons',madedecision:'Made decision',spokegroup:'Spoke in group',tooklead:'Took lead',delegated:'Delegated',protectedtime:'Protected time'};
-      GROWTH_ITEMS.forEach(k=>{ items.push({label:'Growth: '+gShortNa[k], rate:gDaysNa.filter(d=>d.rec.growth[k]).length/gDaysNa.length}); });
+      const newGNa = gDaysNa.filter(d=>d.rec.growth.reps||d.rec.growth.checks);
+      const oldGNa = gDaysNa.filter(d=>!d.rec.growth.reps&&!d.rec.growth.checks);
+      if(newGNa.length){
+        GR_CHK_KEYS.forEach(k=>{ items.push({label:'Growth: '+GR_CHK_LABELS[k], rate:newGNa.filter(d=>d.rec.growth.checks&&d.rec.growth.checks[k]==='yes').length/newGNa.length}); });
+      }
+      if(oldGNa.length){
+        GROWTH_ITEMS.forEach(k=>{ items.push({label:'Growth (legacy): '+k, rate:oldGNa.filter(d=>d.rec.growth[k]).length/oldGNa.length}); });
+      }
     }
     const mDaysNa = wWithData.filter(d=>d.rec.music);
     if(mDaysNa.length) items.push({label:'Music: Studio session', rate:mDaysNa.filter(d=>(d.rec.music.sessions||[]).length>0).length/mDaysNa.length});
@@ -5008,7 +5153,6 @@ function computeNeglectGaps(){
     return 999;
   }
   const H=r=>(r.health||{}),F=r=>(r.faith||{}),G=r=>(r.growth||{});
-  const GL={eyecontact:'Eye contact and presence',posture:'Posture check',spokefirst:'Spoke first',heldsilence:'Held comfortable silence',stayedconvo:'Stayed in the conversation',approached:'Approached someone new',smiledstranger:'Smiled at a stranger',heldground:'Held ground under pressure',normshrink:"Didn't shrink in group",frame:'Frame with women',noticedreaction:'Noticed my reaction before acting',pausedbefore:'Paused before responding',nameemotion:'Named emotion before reacting',impulse:'Impulse control',letgo:'Let go of something',calmunder:'Stayed calm under pressure',notpersonal:"Didn't take it personally",satwith:'Sat with discomfort',fear:'Did something despite fear',initiated:'Initiated instead of waited',askedwanted:'Asked for what I wanted',tookrisk:'Took a calculated risk',hardercall:'Made the harder call',saidyes:'Said yes to something scary',confronted:'Confronted something avoided',setboundary:'Set a boundary',saidno:'Said no and held it',words:'Economy of words',toldtruth:'Told the truth directly',askedneeded:'Asked for what I needed',endedit:'Ended a conversation cleanly',keptcommit:'Kept a commitment',finishedit:'Finished what I started',nodistract:'Worked without distraction',stucktoplan:'Stuck to the plan',didthing:'Did the thing I was avoiding',delayedgrat:'Delayed gratification',showedup:"Showed up when I didn't want to",strictself:'Strict with myself',reachedout:'Reached out to someone',listening:'Active listening',appreciated:'Expressed genuine appreciation',repaired:'Repaired a rupture',fullattention:'Gave full attention',checkedin:'Checked in on someone',learned:'Learned something new',reflectedmistake:'Reflected on a mistake',hardquestion:'Asked myself a hard question',changedmind:'Changed my mind with evidence',tookfeedback:'Took feedback without defensiveness',rehearsal:'Mental rehearsal',tookrespons:'Took responsibility',madedecision:'Made a clear decision',spokegroup:'Spoke up in a group',tooklead:'Took the lead',delegated:'Delegated effectively',protectedtime:'Protected my time'};
   const tiers=[
     {threshold:1,items:[
       {key:'water',label:'Water',fn:r=>H(r).water>0},
@@ -5018,7 +5162,7 @@ function computeNeglectGaps(){
       {key:'brushing',label:'Brushing',fn:r=>H(r).brushing>0},
       {key:'dhikr',label:'Dhikr',tab:'faith',fn:r=>!!F(r).dhikr},
       {key:'gratitude',label:'Gratitude',tab:'faith',fn:r=>!!F(r).gratitude},
-      ...GROWTH_ITEMS.map(k=>({key:'g_'+k,label:GL[k],tab:'growth',fn:r=>G(r)[k]===true}))
+      ...GR_CHK_KEYS.map(k=>({key:'gc_'+k,label:GR_CHK_LABELS[k],tab:'growth',fn:r=>{const g2=G(r);return (g2.checks&&g2.checks[k]==='yes')||(g2[k.replace(/^gc_/,'')]===true);}}))
     ]},
     {threshold:2,items:[
       {key:'pushupsReps',label:'Push-ups',fn:r=>H(r).pushupsReps>0},
