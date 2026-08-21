@@ -278,6 +278,7 @@ let musicReportPeriod = 'month';
 let calMonthOffset = 0;
 let convPeriod = 'weekly';
 let swalatInterval = null;
+let timeElapsedInterval = null;
 let cdCurrentPrayer = null;
 let musicDraftActive = false;
 let musicDraft = {};
@@ -1912,9 +1913,14 @@ function renderHome(){
     const _thisYr=new Date(_now.getFullYear(),_dob.getMonth(),_dob.getDate());
     const _target=_thisYr>=_td?_thisYr:new Date(_now.getFullYear()+1,_dob.getMonth(),_dob.getDate());
     const _days=Math.round((_target-_td)/86400000);
-    const _bdayText=_days===0?'Happy Birthday! 🎂':'🎂 Birthday in '+_days+' day'+(_days===1?'':'s');
-    html+='<div class="card" style="text-align:center;font-family:var(--mono);font-size:13px;color:var(--green);letter-spacing:1px;padding:10px 16px">'+_bdayText+'</div>';
+    const _lastBday=_thisYr>=_td
+      ? new Date(_now.getFullYear()-1,_dob.getMonth(),_dob.getDate())
+      : _thisYr;
+    const _totalDays=Math.round((_target-_lastBday)/86400000);
+    const _sf=Math.max(0,Math.min(1,(_totalDays-_days)/_totalDays));
+    html+=hourglassCardHtml(_sf,_days);
   }
+  html+='<div class="card" style="padding:14px 16px"><div id="home-time-bars"></div></div>';
 
   html += sectionLabel('CATEGORY BALANCE TODAY','var(--home)');
   html += '<div class="card">'+isoCubeHtml(scores)+'</div>';
@@ -2027,6 +2033,7 @@ function renderHome(){
     '</div>';
 
   s.innerHTML = html;
+  renderTimeElapsed();
   renderFaceIdToggle();
   renderNotifToggle();
   const neglectDismissBtn=document.getElementById('neglect-dismiss');
@@ -5732,6 +5739,100 @@ function showProfileSettings(){
   _wireProfileForm('st');
 }
 
+/* ============ HOME — HOURGLASS + TIME BARS ============ */
+function hourglassCardHtml(sf, daysUntil){
+  // sf = sandFraction: 0 = just after birthday (top full), 1 = birthday today (bottom full)
+  const f=sf;
+  // Top sand: drains from top toward waist as f increases
+  const yTop=4+46*f, xTL=5+23*f, xTR=55-23*f;
+  // Bottom sand: rises from bottom toward waist as f increases
+  const yBot=106-46*f, xBL=5+23*f, xBR=55-23*f;
+  const p=v=>v.toFixed(1);
+  const topFrame='M 5,4 L 55,4 L 32,50 L 28,50 Z';
+  const botFrame='M 28,60 L 32,60 L 55,106 L 5,106 Z';
+  const topSand=f<1?`M ${p(xTL)},${p(yTop)} L ${p(xTR)},${p(yTop)} L 32,50 L 28,50 Z`:null;
+  const botSand=f>0?`M ${p(xBL)},${p(yBot)} L ${p(xBR)},${p(yBot)} L 55,106 L 5,106 Z`:null;
+  const trickle=f>0&&f<1?'<rect x="29" y="50" width="2" height="10" fill="var(--green)" opacity="0.45"/>':'';
+  let svg='<svg width="60" height="110" viewBox="0 0 60 110">';
+  svg+=`<path d="${topFrame}" fill="rgba(61,220,151,0.06)" stroke="var(--green)" stroke-width="1.5" stroke-opacity="0.4" stroke-linejoin="round"/>`;
+  svg+=`<path d="${botFrame}" fill="rgba(61,220,151,0.06)" stroke="var(--green)" stroke-width="1.5" stroke-opacity="0.4" stroke-linejoin="round"/>`;
+  if(topSand) svg+=`<path d="${topSand}" fill="var(--green)" opacity="0.7"/>`;
+  if(botSand) svg+=`<path d="${botSand}" fill="var(--green)" opacity="0.7"/>`;
+  svg+=trickle+'</svg>';
+  const bdayText=daysUntil===0?'HAPPY BIRTHDAY! 🎂':'🎂 in '+daysUntil+' day'+(daysUntil===1?'':'s');
+  return '<div class="card" style="text-align:center;padding:14px 16px">'
+    +'<div style="font-family:var(--mono);font-size:8px;color:var(--mute);letter-spacing:2px;margin-bottom:10px">NEXT BIRTHDAY</div>'
+    +svg
+    +'<div style="font-family:var(--mono);font-size:12px;color:var(--green);letter-spacing:1px;margin-top:8px">'+bdayText+'</div>'
+    +'</div>';
+}
+
+function progressBarSvg(pct, segments){
+  const W=340, H=6, gap=2;
+  const segW=(W-(segments-1)*gap)/segments;
+  const filled=Math.max(0,Math.min(segments,pct*segments));
+  const gid='tbg'+segments;
+  let svg=`<svg width="100%" viewBox="0 0 ${W} ${H}" style="display:block">`;
+  svg+=`<defs><linearGradient id="${gid}" x1="0" y1="0" x2="${W}" y2="0" gradientUnits="userSpaceOnUse">`;
+  svg+=`<stop offset="0%" stop-color="var(--cyan)"/><stop offset="100%" stop-color="var(--green)"/>`;
+  svg+=`</linearGradient></defs>`;
+  for(let i=0;i<segments;i++){
+    const x=i*(segW+gap), frac=Math.min(1,Math.max(0,filled-i));
+    svg+=`<rect x="${x.toFixed(1)}" y="0" width="${segW.toFixed(1)}" height="${H}" rx="1.5" fill="rgba(255,255,255,0.07)"/>`;
+    if(frac>0.001) svg+=`<rect x="${x.toFixed(1)}" y="0" width="${(segW*frac).toFixed(1)}" height="${H}" rx="1.5" fill="url(#${gid})"/>`;
+  }
+  return svg+'</svg>';
+}
+
+function yearBarSvg(pct){
+  const W=340, H=6, filled=Math.max(0,Math.min(W,pct*W));
+  let svg=`<svg width="100%" viewBox="0 0 ${W} ${H}" style="display:block">`;
+  svg+=`<defs><linearGradient id="tbgyr" x1="0" y1="0" x2="${W}" y2="0" gradientUnits="userSpaceOnUse">`;
+  svg+=`<stop offset="0%" stop-color="var(--cyan)"/><stop offset="100%" stop-color="var(--green)"/>`;
+  svg+=`</linearGradient></defs>`;
+  svg+=`<rect x="0" y="0" width="${W}" height="${H}" rx="3" fill="rgba(255,255,255,0.07)"/>`;
+  if(filled>0.5) svg+=`<rect x="0" y="0" width="${filled.toFixed(1)}" height="${H}" rx="3" fill="url(#tbgyr)"/>`;
+  return svg+'</svg>';
+}
+
+function renderTimeElapsed(){
+  const el=document.getElementById('home-time-bars');
+  if(!el) return;
+  const now=new Date();
+  const midnight=new Date(now.getFullYear(),now.getMonth(),now.getDate());
+  const dayElapsedSec=(now-midnight)/1000;
+  // DAY
+  const dayPct=dayElapsedSec/86400;
+  const dayRemSec=86400-dayElapsedSec;
+  const dRH=Math.floor(dayRemSec/3600), dRM=Math.floor((dayRemSec%3600)/60);
+  const dayRemStr=dRH>0?dRH+'h '+dRM+'m left':dRM+'m left';
+  // WEEK (Monday-start)
+  const dow0=(now.getDay()+6)%7;
+  const weekElapsedSec=dow0*86400+dayElapsedSec;
+  const weekPct=weekElapsedSec/(7*86400);
+  const weekRemSec=7*86400-weekElapsedSec;
+  const wRD=Math.floor(weekRemSec/86400), wRH=Math.floor((weekRemSec%86400)/3600);
+  const weekRemStr=wRD>=2?wRD+'d '+wRH+'h left':wRD===1?'1d '+wRH+'h left':wRH+'h left';
+  // YEAR
+  const yearStart=new Date(now.getFullYear(),0,1);
+  const yearEnd=new Date(now.getFullYear()+1,0,1);
+  const yearPct=(now-yearStart)/(yearEnd-yearStart);
+  const yearRemMs=yearEnd-now;
+  const yRD=Math.floor(yearRemMs/86400000), yRH=Math.floor((yearRemMs%86400000)/3600000);
+  const yearRemStr=yRD>0?yRD+'d '+yRH+'h left':yRH+'h left';
+  const row=(lbl,rem,bar)=>`<div style="margin-bottom:10px">`
+    +`<div style="display:flex;justify-content:space-between;margin-bottom:4px">`
+    +`<span style="font-family:var(--mono);font-size:9px;letter-spacing:1px;color:var(--mute)">${lbl}</span>`
+    +`<span style="font-family:var(--mono);font-size:9px;color:var(--mute)">${rem}</span>`
+    +`</div>${bar}</div>`;
+  el.innerHTML=row('DAY',dayRemStr,progressBarSvg(dayPct,24))
+    +row('WEEK',weekRemStr,progressBarSvg(weekPct,7))
+    +`<div><div style="display:flex;justify-content:space-between;margin-bottom:4px">`
+    +`<span style="font-family:var(--mono);font-size:9px;letter-spacing:1px;color:var(--mute)">YEAR</span>`
+    +`<span style="font-family:var(--mono);font-size:9px;color:var(--mute)">${yearRemStr}</span>`
+    +`</div>${yearBarSvg(yearPct)}</div>`;
+}
+
 function doInit(){
   migrateMusicSessions();
   backfillTransactionIds();
@@ -5741,6 +5842,8 @@ function doInit(){
   renderFaithCountdown();
   if(swalatInterval) clearInterval(swalatInterval);
   swalatInterval = setInterval(renderFaithCountdown, 1000);
+  if(timeElapsedInterval) clearInterval(timeElapsedInterval);
+  timeElapsedInterval = setInterval(renderTimeElapsed, 1000);
   checkAndNotify(computeNeglectGaps());
   if(!DB.profile().nickname) showOnboarding();
 }

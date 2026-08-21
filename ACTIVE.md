@@ -1170,6 +1170,61 @@ Before tonight, two kinds of "flat" scoring existed inside categories, and only 
 
 ---
 
+## SESSION LOG — 2026-08-18/21, continued (Growth content finalized + built, Health Sport tracking, Faith performance fix, Onboarding/Profile feature)
+
+**Growth content redesign — resumed and finalized.** Picking up from the 2026-08-18 mid-conversation state: user was asked what's actually been on his mind when he thinks about the person he's trying to become, and this time answered directly and fully, rather than the session ending before he could. Real, personal back-and-forth (not spec-gathering) produced a completely new content set, distinct from both the original 15-item and the 57-item public-template-style lists — this is Davydenko's own third version, grounded in what he named himself:
+
+- **Two mechanisms, not one flat list**, deliberately split because a single Yes/No format couldn't honestly hold both kinds of things he wanted to track: **Reps** (tap-to-increment counters, target 50 each, for identity-reprogramming affirmations) and **Yes/No + note** (did the real-world moment happen, with a text field for what actually happened — chosen specifically so the tracker becomes a readable record over time, not just a streak score).
+- **Eleven Kinyarwanda affirmation phrases** (SINDANGIZA VUBA, NDI PROFITABLE, NDI UMUKIRE, NGIRA PATIENCE, NTAMIKINO NGIRA, SINGIRA UBWOBA, SINDYA INZARA, NUBAHA AMATEGEKO YANJYE, MVUGA MACYE, NKORA VUBA, MVUGIRA AHO) — user's own words, explicitly meant to "reprogram my brain by repetition" into a new identity. Six of these (SINGIRA UBWOBA, SINDYA INZARA, NUBAHA AMATEGEKO YANJYE, MVUGA MACYE, NKORA VUBA, MVUGIRA AHO) are **deliberately double-listed**: a rep counter in Section 1 AND a separate situational Yes/No+note check in Section 2, permanently — not a one-time crossover once 50 reps is hit. User confirmed this explicitly when asked. The other five (SINDANGIZA VUBA, NDI PROFITABLE, NDI UMUKIRE, NGIRA PATIENCE, NTAMIKINO NGIRA) are reps-only, no real-world trigger to check against.
+- **Nine items carried forward from the old 57-item menu**, named one at a time when asked which ones still felt like him: Eye contact and presence, Noticed my reaction before acting, Paused before responding, Named emotion before reacting, Impulse control, Stayed calm under pressure, Sat with discomfort, Economy of words, Delayed gratification. Plus one genuinely new item not on the old list at all: Metacognition.
+- **Six new personal items**, distinct from the affirmations: Told the Truth, Stopped Lying (deliberately kept as two SEPARATE items, not one — user corrected this explicitly when they were briefly conflated), Was Direct when Addressing People, Removed Fear, No Weed Today, No Cigarette Today.
+- **Acknowledged overlap kept on purpose:** "Economy of words" (carried forward) and "MVUGA MACYE" (one of the affirmations) mean close to the same thing — user confirmed they're aware and wants both to stay separate rather than merging them.
+- **Final locked spec: 11 Reps items + 22 Yes/No+note items = 33 total** (16 standard checks + the same 6 double-listed affirmations appearing in both sections).
+
+**Build — real mistake caught and corrected before it shipped.** First Claude Code attempt invented 11 completely fabricated affirmation words (Ndizuye, Nkunda, Nzima, Nshimye, Nzaza, Nshobora, Ndahari, Nkora, Ninginga, Ntsinze, Mfite — none of which were ever specified) and built 28 situational checks instead of the correct 22. Caught immediately by the user from a live screenshot, not by any process check — a direct reminder that "it renders and functions correctly" is not the same claim as "it says the right words," same lesson as earlier sessions' verification failures. Corrected via an explicit diff-first process: Claude Code was told to show exactly what was wrong against the real spec before writing anything, produced a clean 11-item and 22-item diff, got confirmation, then re-verified item-by-item (not just counts) via Playwright reading the actual visible text. Second pass came back 11/11 and 22/22 exact matches, including capitalization. **Lesson worth repeating for future content-heavy builds: when Claude Code reports a word-for-word list task as done, verify the actual words, not just that the UI works and the counts match — a working feature with wrong content is still wrong.**
+
+**Old Growth data preserved deliberately.** User confirmed old 57-item-format entries must keep counting and displaying correctly, not be discarded. Claude Code's approach: format detection with no migration — `growthScore()` checks whether `d.growth.reps || d.growth.checks` exists; if not, the old boolean-array formula still runs unchanged. New scoring formula: denominator = 11 reps + 22 checks + 2 (Reading + Meditation) = 35; reps contribute `min(count/50,1)` each, checks contribute 1 or 0 each, summed then rounded once. The double-listed affirmations intentionally score twice (once for reps progress, once for the real-world check) — confirmed as the correct design, not a double-count bug.
+
+---
+
+**Health tab — new Sport/exercise tracking, added via the same real back-and-forth trim-down process as Growth.** User wanted to add specific exercises he does (starting with Rope, Squats, then naming more as they came up: Mt Climbing, In & Out, Plyo Lunges, Plank Hip Dips, Twists, Arm Circle, then Heel to Toe/Weight Shifting/Elbow Circle/Forward Slides/Diagonal Wave under Squats, then Bicycle Crunch/Cable Crunch/Ab Wheel Rollout/Side Plank/Hanging Leg Raise under Abs), sorted into categories by what they target, not by name. **"No category may exist with only one item" was user's own explicit rule** — when Rope and Arm Circle were the only two items without an obvious home, rather than forcing them into Squats or Abs, they became a genuine third category (Cardio/Warm-up) instead.
+
+**Scope correction — Claude offered to suggest additional categories (Push/Pull/Flexibility/Balance), user accepted, then explicitly reversed course** once it became clear the resulting 49-item/7-category list was too long to be usable — same overwhelm mistake Growth had already made and fixed once. User's own words: "I don't want this to feel overwhelming, we can reduce them." All four Claude-suggested categories were cut entirely, back down to the 3 categories and 18 items the user had actually built himself (Squats: 7 items, Abs: 9 items, Cardio/Warm-up: 2 items).
+
+**UI — dropdown-per-category, not a permanent list of rows.** User's own idea, specifically to avoid the 18 items feeling like a wall of counters at rest: each category shows a `<select>`, picking an item reveals a tap counter just for that one, with the category's running total always shown in the header regardless of which item is currently selected. Claude Code's UX addition (not from the user, but approved): the dropdown auto-selects whichever item has the highest count when returning to the tab mid-day, rather than resetting to blank.
+
+**Scoring — a real multi-step negotiation, worth recording in full since it took several corrections to land.** User's first instruction ("give the whole Sport category 45 points") was ambiguous between replacing the existing 45-pt Exercise/Movement bucket entirely versus adding a second parallel 45-pt bucket (which would break the app's 0-100 scoring assumption everywhere else) — asked directly, user confirmed it should MERGE into the existing 45-pt Exercise bucket, not create a new one. This surfaced a real overlap question: the old bucket already has `pushupsReps` and `abrollerReps`; the new list separately has "Push-ups" and "Ab Wheel Rollout." User's rule ("if we find similar exercise, we merge them") was then tested against a concrete choice — merge into one shared count, or let both coexist and both score independently — and user chose the latter (**Option B**) after being shown the distinction explicitly, meaning nothing was actually merged in the end; old and new items with similar names both stay and both count. Final formula, after asking the user for the two open numbers (rep target and per-category point weight) rather than assuming Claude Code's own proposed 10/15/5 tiered defaults: **each of the 3 categories needs 50 total reps (summed across its items) for 5pts, capped at 5pts/category, 15pts max across all 3, folded inside the existing 45-pt Exercise/Movement ceiling** (so the old 9 items plus the new 18 can together earn at most 45, same ceiling as before, not more).
+
+**Verified word-for-word, same discipline as Growth** — all 18 category/item labels checked live against spec after build, confirmed exact matches, syntax clean.
+
+---
+
+**Faith tab lag — real bug, reported from actual phone use, diagnosed and root-caused, not guessed at.** User reported the Faith tab specifically (not other tabs) "slows down" whenever logging a Salat. Claude Code's first measurement attempt (a Playwright MutationObserver timing run) got a misleading number and briefly threatened to spiral into over-engineering the measurement itself rather than diagnosing the cause — caught and redirected twice by explicit instruction to stop instrumenting and read the actual code instead. Correct diagnosis, once it actually looked: the Faith tab is the ONLY tab with a live per-second countdown timer (`swalatInterval`) running in the background, and that interval's "is this still the same prayer as before" check lived on a DOM dataset attribute that `renderFaith()` destroys and recreates on every single tap — so the fast-path text-only update never fired after a Salat tap, forcing a second full countdown-card rebuild within 0-1000ms of every tap. This double-render is what read as "laggy," and explains why no other tab has the problem (no other tab has a background interval touching the DOM). Three fixes: (1) moved the "current prayer" tracking to a module-level JS variable that survives DOM rebuilds instead of a DOM dataset attribute that doesn't, (2) cached `DB.allDays()` once per Faith render instead of calling it (and re-parsing the full JSON history) 4 separate times per tap, (3) made the countdown repopulate synchronously right after render instead of waiting up to 1 second for the next interval tick. Verified: a real Fajr tap showed the correct countdown time in the same execution frame, no blank card, no visible jump.
+
+---
+
+**Onboarding/Profile feature — designed and built, explicitly a first step toward a future public version of the app (same long-standing deferred goal from the 2026-08-15/16 sessions), starting here on the private app first.** User wanted: a nickname (replacing "DAVYDENKO" wherever it's shown, once set — user was explicit this app's brand stays as the default until personalized, not permanently fixed), gender (collected but explicitly NOT used for any content branching yet — that's deferred to whenever the public version design actually happens), date of birth (powers a birthday countdown), and a profile photo/avatar. User also asked for a settings panel to change any of this later.
+
+**Real design questions worked through one at a time, not assumed:**
+- Whether onboarding should trigger on "localStorage empty" (would never fire again on Davydenko's own device, which already has months of data) vs. "no nickname stored yet" (fires correctly going forward on both his device and any future fresh install) — resolved to the latter after Claude flagged the gap directly.
+- Nickname required, everything else optional, confirmed explicitly rather than assumed.
+- Avatar: user chose to support BOTH an uploaded photo (Canvas-compressed to 160×160 JPEG) and a small set of built-in pickable icon avatars, not just one or the other.
+- Settings panel placement: a gear icon next to the "Life OS" header text, opening a full-screen overlay pre-filled with current values.
+
+**A real quiet scope-narrowing caught before it shipped.** Claude Code's first full proposal buried a direct contradiction of the spec inside a "What does NOT change" section, claiming the header "DAVYDENKO" text should stay fixed as a permanent brand name rather than being replaced by the nickname — reversing the explicit requirement without flagging it as a deviation anywhere in the proposal. Caught by re-reading the proposal against the actual locked spec line by line rather than skimming for "does this look reasonable," sent back with the specific contradiction quoted. Corrected: found both hardcoded "DAVYDENKO" occurrences (the header `.brand-mini` div, and separately the Face ID lock screen — a second location that would have been missed entirely if the fix had been applied narrowly), both now read the stored nickname with "DAVYDENKO" as fallback only when unset.
+
+**Built and verified end to end via Playwright:** onboarding appears correctly when no nickname is stored, save button stays disabled until nickname is typed, skipping optional fields works, header AND Face ID lock screen both correctly show the saved nickname, settings panel opens pre-filled and re-saves correctly, onboarding does not reappear on reload, all pre-existing app data (`lo_days`, `lo_books`, etc.) confirmed untouched. One real CSS bug found and fixed mid-verification (not by the user — self-caught during the Playwright pass): the overlay used `inset:0` together with `margin:0 auto`, which silently pushed it 265px off-center; replaced with a conflict-free centering approach.
+
+**Data model:** new `lo_profile` localStorage key — `{ nickname, gender, dob, avatar, avatarPhoto }`. Two new `DB` methods: `profile()` and `saveProfile(p)`. No existing keys or data touched.
+
+---
+
+**Full status at end of this session:** Growth's second real content pass is complete and built (33 items across Reps/Checks, old-format data preserved). Health has 3 new Sport categories (18 items) merged cleanly into the existing 45-pt Exercise ceiling, no new point pool created. Faith's tap-to-log lag is diagnosed and fixed at the root cause, not patched around. A brand-new Onboarding/Profile feature is fully built — the first concrete step toward the long-deferred public-template goal, even though it happened on the personal app first, by design, since it's a genuinely useful feature for Davydenko regardless of whether the public fork ever happens.
+
+**Not yet done, worth flagging for next session:** none of tonight's four changes have been confirmed live on Davydenko's actual phone yet — all verification tonight was Playwright/desktop. Given the Faith fix and the new Sport dropdown UI are both interaction-heavy, a real on-device check (after pushing, closing, and reopening the PWA to clear the service-worker cache — same two-step pattern noted in multiple earlier sessions) is the natural next step before calling any of this fully done.
+
+---
+
 ## LIVE URL
 
 **https://davyduction-web.github.io/LifeOS** — confirmed working by
@@ -1204,7 +1259,9 @@ for Add to Home Screen and any future sharing/testing.
 
 10. **Splash screen assets exist on disk but are NOT wired in.** Both `hf_20260817_173035_....png` and `hf_20260817_174527_....mp4` (silver-metal + teal-glow "Life OS" logo reveal) sit in `LifeOS\LifeOS\Media\`, fully generated and previously proven working in a hybrid PNG-first/video-on-return build — but the whole splash feature was deliberately reverted the same night. If this comes back, the design/build work doesn't need redoing, see the dedicated session log entry above.
 
-11. **Growth content redesign — actively in progress, mid-conversation, nothing built.** See the 2026-08-18 session log entry above for full context. Next step when resumed: the user has not yet answered "what's actually been on your mind lately, when you think about the person you're trying to become" — pick up there, real conversation not spec-gathering, and get the specific items he wants kept from the current 57 before building anything.
+11. **Growth content redesign — DONE.** Finalized and built 2026-08-21 (33 items: 11 Reps + 22 Yes/No+note, old 57-item-format data still counts/displays via format detection). See the 2026-08-18/21 session log entry above.
+
+12. **On-device verification needed for all 2026-08-21 changes** — Growth's new content, Health's new Sport dropdown/scoring, the Faith lag fix, the Onboarding/Profile flow, and the new Hourglass birthday card + Day/Week/Year time-elapsed bars were all only verified via Playwright/desktop, not on Davydenko's actual phone. Push to GitHub Pages (none of these have been pushed yet), then fully close and reopen the PWA (not just background it) to clear the service-worker cache, then spot-check: log a Salat and confirm no lag, try the Squats/Abs dropdowns, confirm the onboarding nickname shows correctly in both the header and the Face ID lock screen, confirm the three time bars render and the Day bar visibly ticks. Set a real DOB in Settings to confirm the hourglass renders with a sensible sand level.
 
 Everything else from every design conversation and every locked decision
 across the whole project history through 2026-08-17 is built, deployed, and confirmed.
@@ -1213,7 +1270,41 @@ section, for everything built.
 
 ---
 
-*Last updated: 2026-08-17, closing (splash screen designed, built, verified, then deliberately reverted at user's request — assets kept on disk for later. Session closed clean: instant boot restored, no open bugs.)*
+*Last updated: 2026-08-21, closing (Hourglass birthday card + three time-elapsed bars fully built and live-tick verified. Onboarding/Profile flow complete. All four changes from this session Playwright-verified on desktop; on-device check still needed.)*
+
+---
+
+## SESSION LOG — 2026-08-21, continued (Hourglass birthday card + Day/Week/Year time-elapsed bars)
+
+**Two new Home tab features, placed between the 7-day trend card and "CATEGORY BALANCE TODAY".**
+
+**Hourglass birthday card.** Conditional — only renders when a DOB is stored in `lo_profile`. SVG hourglass (viewBox 0 0 60 110), trapezoid geometry: top and bottom bulbs as triangles pointing toward the waist. Sand fill (green, 0.7 opacity) drains top-to-bottom as the year advances. Fill fraction `sf` = days-elapsed-since-last-birthday / days-between-last-and-next-birthday; `sf=0` = top full/bottom empty (just had birthday), `sf=1` = top empty/bottom full (birthday today). A thin trickle rect shows at the waist when `0 < sf < 1`. "NEXT BIRTHDAY" label above, days-remaining text below ("🎂 in N days" or "HAPPY BIRTHDAY! 🎂" when N=0). Birthday-in-N-days counts from CALENDAR MIDNIGHT of today to calendar midnight of the birthday, avoiding timezone-sensitive millisecond math.
+
+**Three time-elapsed bars (DAY / WEEK / YEAR).** Always render — unconditional, no profile requirement. One card wrapping a `#home-time-bars` div, populated by `renderTimeElapsed()` which is called once by `renderHome()` and then again every second by `timeElapsedInterval`. Each row: left label (DAY/WEEK/YEAR), right remaining-time text, then the bar SVG below.
+
+- **DAY**: 24 segments (one per hour), segmented via `progressBarSvg(pct, 24)`. Remaining text: "Xh Ym left" when ≥1h remaining, "Ym left" otherwise. Second-level precision — updates live.
+- **WEEK**: 7 segments (one per day), same `progressBarSvg(pct, 7)`. Monday-start convention: `(now.getDay()+6)%7` → 0=Mon, 6=Sun, same as the existing `getWeekDays()` helper. Remaining: "Xd Yh left" / "1d Yh left" / "Yh left".
+- **YEAR**: one smooth continuous gradient bar (no segments), `yearBarSvg(pct)`. Remaining: "Xd Yh left" — hours included (not just days, confirmed user adjustment before building).
+
+**Visual language:** segmented bars use a 24-segment gap structure with a `linearGradient` (`cyan`→`green`, `gradientUnits="userSpaceOnUse"`) spanning the full 340-unit viewBox width across all segments — same gradient appears whether a segment is partially or fully filled, preserving visual continuity. Year's smooth bar uses a single rect with the same gradient. Track rects are `rgba(255,255,255,0.07)`. All bars use `width:100%; viewBox 0 0 340 6`.
+
+**Live-tick verification:** confirmed via MutationObserver on `#home-time-bars` — 3 DOM mutations in 3.5 seconds (one per second interval, matching expected cadence). The `renderTimeElapsed` reference is captured at `setInterval` call time, so monkey-patching `window.renderTimeElapsed` after the fact does not intercept the interval — verified this is the correct explanation for why a post-hoc patch-counter returned 0, not a bug in the feature.
+
+**Onboarding/Profile feature (this session closed the verification pass from the prior sub-session):** all checks confirmed — onboarding fires once on first load (no nickname stored), disabled until nickname typed, optional fields skippable, nickname replaces "DAVYDENKO" in both the header `.brand-mini` and the Face ID lock screen, settings panel pre-fills correctly and re-saves without touching any other data.
+
+**CSS positioning fix found and verified:** overlay was 265px right of the app content on a 1920px viewport. Root cause: `inset:0` sets `right:0`; combined with `left:50%; transform:translateX(-50%); margin:0 auto` on a `position:fixed` element, the browser splits the remaining 530px as 265px auto margin on each side. Fix: replaced with `position:fixed; top:0; bottom:0; left:50%; transform:translateX(-50%)` — removes `inset:0` and `margin:0 auto` entirely. After fix, overlay left matches app left exactly.
+
+**New functions:** `applyProfileNickname()`, `compressAvatar(file,cb)`, `_profileOverlayHtml(pre,p,isNew)`, `_wireProfileForm(pre)`, `_readProfileForm(pre)`, `saveProfileForm(pre,isNew)`, `showOnboarding()`, `showProfileSettings()`, `hourglassCardHtml(sf,daysUntil)`, `progressBarSvg(pct,segments)`, `yearBarSvg(pct)`, `renderTimeElapsed()`.
+
+**New module-level variables:** `swalatInterval` (was inline, now named), `timeElapsedInterval`, `cdCurrentPrayer`.
+
+**New DB methods:** `DB.profile()`, `DB.saveProfile(p)`.
+
+**New localStorage key:** `lo_profile` — `{ nickname, gender, dob, avatar, avatarPhoto }`. No existing keys touched.
+
+**Test DOB** (1995-03-15, set during Playwright verification) **removed at end of session** — profile left as `{ nickname: "Davydenko", gender: null, avatar: "builtin:lion", avatarPhoto: null }`, no DOB, so hourglass card correctly hidden.
+
+**Not yet pushed to GitHub Pages.** Four changes from the 2026-08-21 session total (Growth content, Health Sport, Faith lag fix, Onboarding/Profile), plus this session's Hourglass/Time Bars — none yet pushed. On-device check still needed before treating any of them as fully confirmed.
 
 ---
 
