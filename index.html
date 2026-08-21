@@ -1858,6 +1858,8 @@ function renderHome(){
     );
   }
 
+  html += '<div id="home-day-ring"></div>';
+
   const trendDays = [];
   for(let i=6;i>=0;i--){
     const dd = new Date(TODAY); dd.setDate(dd.getDate()-i);
@@ -1904,23 +1906,6 @@ function renderHome(){
   trendSvg += '</svg>';
   const dayLabels = trendDays.map(t=>'<span>'+t.date.toLocaleDateString('en-US',{weekday:'short'}).charAt(0)+'</span>').join('');
   html += '<div class="card">'+'<div style="font-family:var(--mono);font-size:9px;color:var(--mute);margin-bottom:6px">LAST 7 DAYS</div>'+trendSvg+'<div class="trend-labels">'+dayLabels+'</div></div>';
-
-  const _prof=DB.profile();
-  if(_prof.dob){
-    const _dob=new Date(_prof.dob+'T00:00:00');
-    const _now=new Date();
-    const _td=new Date(_now.getFullYear(),_now.getMonth(),_now.getDate());
-    const _thisYr=new Date(_now.getFullYear(),_dob.getMonth(),_dob.getDate());
-    const _target=_thisYr>=_td?_thisYr:new Date(_now.getFullYear()+1,_dob.getMonth(),_dob.getDate());
-    const _days=Math.round((_target-_td)/86400000);
-    const _lastBday=_thisYr>=_td
-      ? new Date(_now.getFullYear()-1,_dob.getMonth(),_dob.getDate())
-      : _thisYr;
-    const _totalDays=Math.round((_target-_lastBday)/86400000);
-    const _sf=Math.max(0,Math.min(1,(_totalDays-_days)/_totalDays));
-    html+=hourglassCardHtml(_sf,_days);
-  }
-  html+='<div class="card" style="padding:14px 16px"><div id="home-time-bars"></div></div>';
 
   html += sectionLabel('CATEGORY BALANCE TODAY','var(--home)');
   html += '<div class="card">'+isoCubeHtml(scores)+'</div>';
@@ -1998,6 +1983,23 @@ function renderHome(){
    +'</div>';
   html += calendarHtml(DB.allDays(), calY, calM, calMode);
   html += '</div>';
+
+  const _prof=DB.profile();
+  if(_prof.dob){
+    const _dob=new Date(_prof.dob+'T00:00:00');
+    const _now=new Date();
+    const _td=new Date(_now.getFullYear(),_now.getMonth(),_now.getDate());
+    const _thisYr=new Date(_now.getFullYear(),_dob.getMonth(),_dob.getDate());
+    const _target=_thisYr>=_td?_thisYr:new Date(_now.getFullYear()+1,_dob.getMonth(),_dob.getDate());
+    const _days=Math.round((_target-_td)/86400000);
+    const _lastBday=_thisYr>=_td
+      ? new Date(_now.getFullYear()-1,_dob.getMonth(),_dob.getDate())
+      : _thisYr;
+    const _totalDays=Math.round((_target-_lastBday)/86400000);
+    const _sf=Math.max(0,Math.min(1,(_totalDays-_days)/_totalDays));
+    html+=hourglassCardHtml(_sf,_days);
+  }
+  html+='<div class="card" style="padding:14px 16px"><div id="home-time-bars"></div></div>';
 
   html += sectionLabel('STILL OPEN TODAY');
   let open = [];
@@ -5741,25 +5743,35 @@ function showProfileSettings(){
 
 /* ============ HOME — HOURGLASS + TIME BARS ============ */
 function hourglassCardHtml(sf, daysUntil){
-  // sf = sandFraction: 0 = just after birthday (top full), 1 = birthday today (bottom full)
-  const f=sf;
-  // Top sand: drains from top toward waist as f increases
-  const yTop=4+46*f, xTL=5+23*f, xTR=55-23*f;
-  // Bottom sand: rises from bottom toward waist as f increases
-  const yBot=106-46*f, xBL=5+23*f, xBR=55-23*f;
+  // sf: 0 = just after birthday (top full), 1 = birthday today (bottom full)
   const p=v=>v.toFixed(1);
-  const topFrame='M 5,4 L 55,4 L 32,50 L 28,50 Z';
-  const botFrame='M 28,60 L 32,60 L 55,106 L 5,106 Z';
-  const topSand=f<1?`M ${p(xTL)},${p(yTop)} L ${p(xTR)},${p(yTop)} L 32,50 L 28,50 Z`:null;
-  const botSand=f>0?`M ${p(xBL)},${p(yBot)} L ${p(xBR)},${p(yBot)} L 55,106 L 5,106 Z`:null;
-  const trickle=f>0&&f<1?'<rect x="29" y="50" width="2" height="10" fill="var(--green)" opacity="0.45"/>':'';
-  let svg='<svg width="60" height="110" viewBox="0 0 60 110">';
-  svg+=`<path d="${topFrame}" fill="rgba(61,220,151,0.06)" stroke="var(--green)" stroke-width="1.5" stroke-opacity="0.4" stroke-linejoin="round"/>`;
-  svg+=`<path d="${botFrame}" fill="rgba(61,220,151,0.06)" stroke="var(--green)" stroke-width="1.5" stroke-opacity="0.4" stroke-linejoin="round"/>`;
-  if(topSand) svg+=`<path d="${topSand}" fill="var(--green)" opacity="0.7"/>`;
-  if(botSand) svg+=`<path d="${botSand}" fill="var(--green)" opacity="0.7"/>`;
+  // Top bulb spans y=10..60 (50px), bottom bulb spans y=68..110 (42px)
+  const yTopSand=10+50*sf;
+  const hTopSand=Math.max(0,60-yTopSand);
+  const yBotSand=110-42*sf;
+  const hBotSand=Math.max(0,110-yBotSand);
+  const trickle=(sf>0&&sf<1)?'<rect x="28.5" y="60" width="3" height="8" fill="#5DCAA5"/>':'';
+  let svg='<svg width="60" height="120" viewBox="0 0 60 120">';
+  svg+='<defs>'
+    +'<clipPath id="hgTopClip"><path d="M 5,10 L 55,10 C 55,42 36,56 33,60 L 27,60 C 24,56 5,42 5,10 Z"/></clipPath>'
+    +'<clipPath id="hgBotClip"><path d="M 27,68 L 33,68 C 36,72 55,86 55,110 L 5,110 C 5,86 24,72 27,68 Z"/></clipPath>'
+    +'</defs>';
+  // Stand bars
+  svg+='<rect x="5" y="3" width="50" height="7" rx="3.5" fill="rgba(93,202,165,0.1)" stroke="#5DCAA5" stroke-width="1.5" stroke-opacity="0.5"/>';
+  svg+='<rect x="5" y="110" width="50" height="7" rx="3.5" fill="rgba(93,202,165,0.1)" stroke="#5DCAA5" stroke-width="1.5" stroke-opacity="0.5"/>';
+  // Glass bulb outlines — smooth Bezier curves, no sharp corners
+  svg+='<path d="M 5,10 L 55,10 C 55,42 36,56 33,60 L 27,60 C 24,56 5,42 5,10 Z" fill="rgba(93,202,165,0.06)" stroke="#5DCAA5" stroke-width="1.5" stroke-opacity="0.45"/>';
+  svg+='<path d="M 27,68 L 33,68 C 36,72 55,86 55,110 L 5,110 C 5,86 24,72 27,68 Z" fill="rgba(93,202,165,0.06)" stroke="#5DCAA5" stroke-width="1.5" stroke-opacity="0.45"/>';
+  // Neck connector
+  svg+='<rect x="27" y="60" width="6" height="8" fill="rgba(93,202,165,0.08)" stroke="#5DCAA5" stroke-width="1" stroke-opacity="0.3"/>';
+  // Sand — single opaque #5DCAA5 fill, clipped to bulb shape (no stacked opacity)
+  if(hTopSand>0) svg+=`<rect x="4" y="${p(yTopSand)}" width="52" height="${p(hTopSand)}" fill="#5DCAA5" clip-path="url(#hgTopClip)"/>`;
+  if(hBotSand>0) svg+=`<rect x="4" y="${p(yBotSand)}" width="52" height="${p(hBotSand)}" fill="#5DCAA5" clip-path="url(#hgBotClip)"/>`;
   svg+=trickle+'</svg>';
-  const bdayText=daysUntil===0?'HAPPY BIRTHDAY! 🎂':'🎂 in '+daysUntil+' day'+(daysUntil===1?'':'s');
+  const pctLabel=Math.round(sf*100)+'%';
+  const bdayText=daysUntil===0
+    ?'HAPPY BIRTHDAY!'
+    :pctLabel+' · in '+daysUntil+' day'+(daysUntil===1?'':'s');
   return '<div class="card" style="text-align:center;padding:14px 16px">'
     +'<div style="font-family:var(--mono);font-size:8px;color:var(--mute);letter-spacing:2px;margin-bottom:10px">NEXT BIRTHDAY</div>'
     +svg
@@ -5795,9 +5807,73 @@ function yearBarSvg(pct){
   return svg+'</svg>';
 }
 
+function stripedContBarSvg(pct,gid,spid){
+  const W=340,H=8,filled=Math.max(0,Math.min(W,pct*W));
+  let svg=`<svg width="100%" viewBox="0 0 ${W} ${H}" style="display:block">`;
+  svg+=`<defs>`
+    +`<linearGradient id="${gid}" x1="0" y1="0" x2="${W}" y2="0" gradientUnits="userSpaceOnUse">`
+    +`<stop offset="0%" stop-color="rgba(0,200,180,1)"/><stop offset="100%" stop-color="rgba(93,202,165,1)"/>`
+    +`</linearGradient>`
+    +`<pattern id="${spid}" patternUnits="userSpaceOnUse" width="10" height="10" patternTransform="rotate(45)">`
+    +`<line x1="5" y1="0" x2="5" y2="10" stroke="rgba(255,255,255,0.22)" stroke-width="3.5"/>`
+    +`</pattern>`
+    +`<mask id="${spid}m"><rect x="0" y="0" width="${filled.toFixed(1)}" height="${H}" rx="4" fill="white"/></mask>`
+    +`</defs>`;
+  svg+=`<rect x="0" y="0" width="${W}" height="${H}" rx="4" fill="rgba(255,255,255,0.07)"/>`;
+  if(filled>0.5){
+    svg+=`<g style="filter:drop-shadow(0 0 5px rgba(0,200,180,0.75))">`;
+    svg+=`<rect x="0" y="0" width="${filled.toFixed(1)}" height="${H}" rx="4" fill="url(#${gid})"/>`;
+    svg+=`<rect x="0" y="0" width="${W}" height="${H}" fill="url(#${spid})" mask="url(#${spid}m)"/>`;
+    svg+=`</g>`;
+  }
+  return svg+'</svg>';
+}
+
+function stripedSegBarSvg(pct,segments,gid,spid){
+  const W=340,H=8,gap=2;
+  const segW=(W-(segments-1)*gap)/segments;
+  const filled=Math.max(0,Math.min(segments,pct*segments));
+  let svg=`<svg width="100%" viewBox="0 0 ${W} ${H}" style="display:block">`;
+  svg+=`<defs>`
+    +`<linearGradient id="${gid}" x1="0" y1="0" x2="${W}" y2="0" gradientUnits="userSpaceOnUse">`
+    +`<stop offset="0%" stop-color="rgba(0,200,180,1)"/><stop offset="100%" stop-color="rgba(93,202,165,1)"/>`
+    +`</linearGradient>`
+    +`<pattern id="${spid}" patternUnits="userSpaceOnUse" width="10" height="10" patternTransform="rotate(45)">`
+    +`<line x1="5" y1="0" x2="5" y2="10" stroke="rgba(255,255,255,0.22)" stroke-width="3.5"/>`
+    +`</pattern>`
+    +`</defs>`;
+  for(let i=0;i<segments;i++){
+    const x=i*(segW+gap), frac=Math.min(1,Math.max(0,filled-i));
+    svg+=`<rect x="${x.toFixed(1)}" y="0" width="${segW.toFixed(1)}" height="${H}" rx="2" fill="rgba(255,255,255,0.07)"/>`;
+    if(frac>0.001){
+      const fw=(segW*frac).toFixed(1);
+      svg+=`<g style="filter:drop-shadow(0 0 4px rgba(0,200,180,0.75))">`;
+      svg+=`<rect x="${x.toFixed(1)}" y="0" width="${fw}" height="${H}" rx="2" fill="url(#${gid})"/>`;
+      svg+=`<clipPath id="${spid}c${i}"><rect x="${x.toFixed(1)}" y="0" width="${fw}" height="${H}" rx="2"/></clipPath>`;
+      svg+=`<rect x="${x.toFixed(1)}" y="0" width="${fw}" height="${H}" fill="url(#${spid})" clip-path="url(#${spid}c${i})"/>`;
+      svg+=`</g>`;
+    }
+  }
+  return svg+'</svg>';
+}
+
+function dayRingCardHtml(dayPct,dayRemStr){
+  const pct=Math.round(dayPct*100);
+  return '<div class="card" style="padding:14px 16px">'
+    +'<div style="display:flex;align-items:center;gap:14px;margin-bottom:10px">'
+    +ringSvg(pct,'var(--cyan)',pct,56)
+    +'<div>'
+    +'<div style="font-family:var(--mono);font-size:9px;color:var(--mute);letter-spacing:1px">DAY</div>'
+    +'<div style="font-family:var(--mono);font-size:11px;color:var(--cyan);margin-top:4px">'+pct+'% · '+dayRemStr+'</div>'
+    +'</div>'
+    +'</div>'
+    +stripedContBarSvg(dayPct,'dayBarGrad','dayBarStripe')
+    +'</div>';
+}
+
 function renderTimeElapsed(){
   const el=document.getElementById('home-time-bars');
-  if(!el) return;
+  const dayEl=document.getElementById('home-day-ring');
   const now=new Date();
   const midnight=new Date(now.getFullYear(),now.getMonth(),now.getDate());
   const dayElapsedSec=(now-midnight)/1000;
@@ -5806,6 +5882,8 @@ function renderTimeElapsed(){
   const dayRemSec=86400-dayElapsedSec;
   const dRH=Math.floor(dayRemSec/3600), dRM=Math.floor((dayRemSec%3600)/60);
   const dayRemStr=dRH>0?dRH+'h '+dRM+'m left':dRM+'m left';
+  if(dayEl) dayEl.innerHTML=dayRingCardHtml(dayPct,dayRemStr);
+  if(!el) return;
   // WEEK (Monday-start)
   const dow0=(now.getDay()+6)%7;
   const weekElapsedSec=dow0*86400+dayElapsedSec;
@@ -5820,17 +5898,16 @@ function renderTimeElapsed(){
   const yearRemMs=yearEnd-now;
   const yRD=Math.floor(yearRemMs/86400000), yRH=Math.floor((yearRemMs%86400000)/3600000);
   const yearRemStr=yRD>0?yRD+'d '+yRH+'h left':yRH+'h left';
-  const row=(lbl,rem,bar)=>`<div style="margin-bottom:10px">`
-    +`<div style="display:flex;justify-content:space-between;margin-bottom:4px">`
+  const srow=(lbl,pct,rem,bar)=>`<div style="margin-bottom:10px">`
+    +`<div style="display:flex;justify-content:space-between;margin-bottom:5px">`
     +`<span style="font-family:var(--mono);font-size:9px;letter-spacing:1px;color:var(--mute)">${lbl}</span>`
-    +`<span style="font-family:var(--mono);font-size:9px;color:var(--mute)">${rem}</span>`
+    +`<span style="font-family:var(--mono);font-size:9px;color:var(--mute)">${Math.round(pct*100)}% · ${rem}</span>`
     +`</div>${bar}</div>`;
-  el.innerHTML=row('DAY',dayRemStr,progressBarSvg(dayPct,24))
-    +row('WEEK',weekRemStr,progressBarSvg(weekPct,7))
-    +`<div><div style="display:flex;justify-content:space-between;margin-bottom:4px">`
+  el.innerHTML=srow('WEEK',weekPct,weekRemStr,stripedSegBarSvg(weekPct,7,'wkBarGrad','wkBarStripe'))
+    +`<div><div style="display:flex;justify-content:space-between;margin-bottom:5px">`
     +`<span style="font-family:var(--mono);font-size:9px;letter-spacing:1px;color:var(--mute)">YEAR</span>`
-    +`<span style="font-family:var(--mono);font-size:9px;color:var(--mute)">${yearRemStr}</span>`
-    +`</div>${yearBarSvg(yearPct)}</div>`;
+    +`<span style="font-family:var(--mono);font-size:9px;color:var(--mute)">${Math.round(yearPct*100)}% · ${yearRemStr}</span>`
+    +`</div>${stripedContBarSvg(yearPct,'yrBarGrad','yrBarStripe')}</div>`;
 }
 
 function doInit(){
