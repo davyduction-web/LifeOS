@@ -157,12 +157,26 @@ button:active{transform:scale(0.96)}
 .wp-col::-webkit-scrollbar{display:none}
 .wp-item{height:44px;display:flex;align-items:center;justify-content:center;scroll-snap-align:center;font-family:var(--mono);transition:font-size .1s,opacity .1s,color .1s}
 .wp-rail{position:absolute;top:44px;left:0;right:0;height:44px;border-top:1px solid var(--border);border-bottom:1px solid var(--border);background:rgba(255,255,255,0.04);pointer-events:none;z-index:1}
+.profile-overlay{position:fixed;top:0;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:430px;z-index:9990;background:var(--bg);display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:24px 18px;box-sizing:border-box}
+.profile-card{width:100%;max-width:390px;padding:24px 20px;background:var(--card);border-radius:20px;border:1px solid var(--border);margin:auto}
+.profile-avatar-row{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px}
+.profile-avatar-item{width:52px;height:52px;border-radius:50%;background:rgba(255,255,255,0.05);border:2px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:22px;cursor:pointer;transition:border-color .15s,background .15s}
+.profile-avatar-item.selected{border-color:var(--green);background:rgba(61,220,151,0.08)}
+.profile-gender-row{display:flex;gap:8px;margin-bottom:4px}
+.profile-gender-pill{flex:1;padding:8px;border-radius:20px;border:1px solid var(--border);background:transparent;color:var(--fg);font-family:var(--mono);font-size:11px;letter-spacing:1px;cursor:pointer;transition:all .15s}
+.profile-gender-pill.selected{border-color:var(--green);background:rgba(61,220,151,0.08);color:var(--green)}
+.profile-input{width:100%;padding:10px 12px;border-radius:12px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--fg);font-family:var(--mono);font-size:13px;outline:none;box-sizing:border-box;-webkit-appearance:none}
+.profile-input:focus{border-color:var(--green)}
+.profile-save-btn{width:100%;margin-top:20px;padding:14px;border-radius:20px;border:1px solid var(--green);background:rgba(61,220,151,0.08);color:var(--green);font-family:var(--mono);font-size:13px;font-weight:700;letter-spacing:1px;cursor:pointer;transition:opacity .15s}
+.profile-save-btn:disabled{opacity:.35;cursor:default}
+.profile-gear-btn{background:transparent;border:none;color:var(--mute);font-size:13px;cursor:pointer;padding:0 0 0 4px;vertical-align:middle;line-height:1}
+.profile-gear-btn:hover{color:var(--fg)}
 </style>
 </head>
 <body>
 <div class="app">
   <div class="hdr">
-    <div><div class="brand-mini">DAVYDENKO</div><div class="brand-title">Life OS</div></div>
+    <div><div class="brand-mini" id="brand-name">DAVYDENKO</div><div class="brand-title">Life OS <button class="profile-gear-btn" onclick="showProfileSettings()" aria-label="Profile settings">⚙</button></div></div>
     <img src="image_holographic_logo-825a1b.png" class="hdr-logo" alt="Life OS logo">
     <div class="status"><div class="dot"></div><span class="status-text">SYSTEM ONLINE</span></div>
   </div>
@@ -198,7 +212,7 @@ button:active{transform:scale(0.96)}
 
 <div id="faceid-lock" style="display:none;position:fixed;inset:0;z-index:9999;background:var(--bg);flex-direction:column;align-items:center;justify-content:center;padding:24px;max-width:430px;margin:0 auto;left:50%;transform:translateX(-50%);width:100%">
   <div style="font-size:48px;margin-bottom:16px">&#128274;</div>
-  <div style="color:var(--green);font-size:10px;letter-spacing:3px;font-weight:700;margin-bottom:6px;font-family:var(--mono)">DAVYDENKO</div>
+  <div id="faceid-name" style="color:var(--green);font-size:10px;letter-spacing:3px;font-weight:700;margin-bottom:6px;font-family:var(--mono)">DAVYDENKO</div>
   <div style="font-family:var(--serif);font-size:18px;margin-bottom:10px">Life OS</div>
   <div style="color:var(--mute);font-size:11px;margin-bottom:32px;text-align:center;font-family:var(--sans)">This app is protected by Face ID</div>
   <button onclick="unlockWithFaceId()" style="width:100%;max-width:280px;padding:14px;background:rgba(61,220,151,0.08);border:1px solid var(--green);border-radius:20px;color:var(--green);font-size:13px;font-weight:700;cursor:pointer;letter-spacing:1px;font-family:var(--sans)">Unlock with Face ID</button>
@@ -226,7 +240,9 @@ const DB = {
   goals(){ return JSON.parse(localStorage.getItem('lo_goals')||'{"trading":0,"longrange":0,"savedSoFar":0,"tradingWithdrawn":0}'); },
   saveGoals(g){ localStorage.setItem('lo_goals', JSON.stringify(g)); },
   books(){ return JSON.parse(localStorage.getItem('lo_books')||'[]'); },
-  saveBooks(b){ localStorage.setItem('lo_books', JSON.stringify(b)); }
+  saveBooks(b){ localStorage.setItem('lo_books', JSON.stringify(b)); },
+  profile(){ return JSON.parse(localStorage.getItem('lo_profile')||'null')||{}; },
+  saveProfile(p){ localStorage.setItem('lo_profile', JSON.stringify(p)); }
 };
 
 function nextTxId(){
@@ -247,6 +263,7 @@ const TODAY = todayStr();
 let EDIT_DATE = todayStr();
 let day = DB.day(EDIT_DATE);
 let plankTimer = {running:false, start:null, elapsed:0, iv:null};
+let sportSel = {squats:null, abs:null, cardio:null};
 let neglectDismissed = false;
 let cmpOffset = {faith:1, health:1, music:1, finance:1, growth:1};
 let reviewWeekOffset = 0;
@@ -261,6 +278,7 @@ let musicReportPeriod = 'month';
 let calMonthOffset = 0;
 let convPeriod = 'weekly';
 let swalatInterval = null;
+let cdCurrentPrayer = null;
 let musicDraftActive = false;
 let musicDraft = {};
 let musicRadarSort = 'mins';
@@ -304,8 +322,8 @@ function healthScore(d){
   // Bucket 3: Water + Brushing (5 pts each, proportional)
   const waterPts = Math.min((h.water||0)/5, 1) * 5;
   const brushPts = Math.min((h.brushing||0)/2, 1) * 5;
-  // Bucket 4: Exercise/movement (45 pts, 9 items, 5 pts each — sum then round once)
-  const exercisePts =
+  // Bucket 4: Exercise/movement (45 pts ceiling — 9 existing items + 3 sport categories)
+  const oldExPts =
     Math.min((h.pushupsReps||0)/30, 1) * 5 +
     Math.min((h.abrollerReps||0)/15, 1) * 5 +
     Math.min((h.kegelReps||0)/20, 1) * 5 +
@@ -315,6 +333,13 @@ function healthScore(d){
     Math.min((h.runningKm||0)/3, 1) * 5 +
     Math.min((h.hikingMinutes||0)/30, 1) * 5 +
     Math.min((h.walkingMinutes||0)/30, 1) * 5;
+  const sp = h.sport || {};
+  const _s = o => Object.values(o||{}).reduce((a,b)=>a+b, 0);
+  const sportPts =
+    Math.min(_s(sp.squats)/50, 1)*5 +
+    Math.min(_s(sp.abs)   /50, 1)*5 +
+    Math.min(_s(sp.cardio)/50, 1)*5;
+  const exercisePts = Math.min(oldExPts + sportPts, 45);
   return Math.round(sleepPts + habitPts + waterPts + brushPts + exercisePts);
 }
 const GROWTH_ITEMS = [
@@ -389,8 +414,8 @@ function financeScore(d){ return d.finance.logged ? 100 : 0; }
 function dayScore(d){
   return Math.round((faithScore(d)+healthScore(d)+musicScore(d)+financeScore(d)+growthScore(d))/5);
 }
-function monthAvg(scoreFn, monthPrefix){
-  const all = DB.allDays();
+function monthAvg(scoreFn, monthPrefix, cachedAll){
+  const all = cachedAll || DB.allDays();
   const keys = Object.keys(all).filter(k=>k.startsWith(monthPrefix));
   if(!keys.length) return 0;
   let sum=0; keys.forEach(k=>sum+=scoreFn(all[k]));
@@ -449,8 +474,8 @@ function ringSvg(pct,color,val,size,color2){
     '<circle cx="'+size/2+'" cy="'+size/2+'" r="'+r+'" fill="none" stroke="url(#'+gid+')" stroke-width="'+sw+'" stroke-linecap="round" stroke-dasharray="'+c+'" stroke-dashoffset="'+off+'" transform="rotate(-90 '+size/2+' '+size/2+')"></circle>'+
     '<text x="'+size/2+'" y="'+(size/2+5)+'" text-anchor="middle" font-size="'+fontSize+'" font-weight="700" fill="var(--text)" font-family="DM Serif Display,serif">'+val+'</text></svg></span>';
 }
-function computeStreak(testFn, fromDate){
-  const all = DB.allDays();
+function computeStreak(testFn, fromDate, cachedAll){
+  const all = cachedAll || DB.allDays();
   let d = new Date(fromDate||EDIT_DATE);
   let count = 0;
   while(true){
@@ -1594,11 +1619,11 @@ function cmpRow(label, refVal, todayVal){
     '<span style="width:72px;text-align:right;font-family:var(--mono)">'+todayVal+'</span>'+
     '</div>';
 }
-function compareDayHtml(tab, color){
+function compareDayHtml(tab, color, cachedAll){
   const offset=cmpOffset[tab];
   const rd=new Date(EDIT_DATE); rd.setDate(rd.getDate()-offset);
   const refStr=rd.toISOString().slice(0,10);
-  const refRec=DB.allDays()[refStr]||null;
+  const refRec=(cachedAll||DB.allDays())[refStr]||null;
   const refLabel=offset===1?'YESTERDAY':rd.toLocaleDateString('en-US',{month:'short',day:'numeric'}).toUpperCase();
   let rows='';
 
@@ -1879,6 +1904,18 @@ function renderHome(){
   const dayLabels = trendDays.map(t=>'<span>'+t.date.toLocaleDateString('en-US',{weekday:'short'}).charAt(0)+'</span>').join('');
   html += '<div class="card">'+'<div style="font-family:var(--mono);font-size:9px;color:var(--mute);margin-bottom:6px">LAST 7 DAYS</div>'+trendSvg+'<div class="trend-labels">'+dayLabels+'</div></div>';
 
+  const _prof=DB.profile();
+  if(_prof.dob){
+    const _dob=new Date(_prof.dob+'T00:00:00');
+    const _now=new Date();
+    const _td=new Date(_now.getFullYear(),_now.getMonth(),_now.getDate());
+    const _thisYr=new Date(_now.getFullYear(),_dob.getMonth(),_dob.getDate());
+    const _target=_thisYr>=_td?_thisYr:new Date(_now.getFullYear()+1,_dob.getMonth(),_dob.getDate());
+    const _days=Math.round((_target-_td)/86400000);
+    const _bdayText=_days===0?'Happy Birthday! 🎂':'🎂 Birthday in '+_days+' day'+(_days===1?'':'s');
+    html+='<div class="card" style="text-align:center;font-family:var(--mono);font-size:13px;color:var(--green);letter-spacing:1px;padding:10px 16px">'+_bdayText+'</div>';
+  }
+
   html += sectionLabel('CATEGORY BALANCE TODAY','var(--home)');
   html += '<div class="card">'+isoCubeHtml(scores)+'</div>';
 
@@ -2085,12 +2122,12 @@ function renderFaithCountdown(){
   const digits=pad(Math.floor(diff/3600))+':'+pad(Math.floor(diff%3600/60))+':'+pad(diff%60);
   // Fast path: only update digits textContent when prayer hasn't changed
   const cdSpan=document.getElementById('swalat-cd-digits');
-  if(cdSpan&&el.dataset.cdPrayer===nextName){
+  if(cdSpan&&cdCurrentPrayer===nextName){
     cdSpan.textContent=digits;
     return;
   }
   // Full build: first render or prayer just rolled over to the next one
-  el.dataset.cdPrayer=nextName;
+  cdCurrentPrayer=nextName;
   el.innerHTML='<div style="text-align:center;padding:10px 0">'
     +'<div style="font-family:var(--mono);font-size:8px;color:var(--mute);letter-spacing:1px">NEXT PRAYER</div>'
     +'<div style="margin:5px 0 2px">'
@@ -2272,11 +2309,12 @@ function renderFaithReport(s){
 function renderFaith(){
   const s = document.getElementById('s-faith');
   if(faithReportOpen){ renderFaithReport(s); return; }
+  const all = DB.allDays();
   const prayers = [['fajr','Fajr'],['dhuhr','Dhuhr'],['asr','Asr'],['maghrib','Maghrib'],['isha','Isha']];
   let html = `<div style="display:flex;justify-content:flex-end;margin-bottom:8px">`+
     `<button class="btn-ghost" id="open-faith-report" style="border-color:var(--faith);color:var(--faith);padding:6px 14px;font-size:12px">Report →</button>`+
     `</div>`;
-  html += compareDayHtml('faith','var(--faith)');
+  html += compareDayHtml('faith','var(--faith)', all);
   html += '<div class="card" id="swalat-cd" style="min-height:80px">'+'</div>';
   html += sectionLabel('PRAYERS TODAY, TAP TO SET','var(--faith)');
   html += '<div class="card">';
@@ -2291,7 +2329,7 @@ function renderFaith(){
   });
   html += '</div>';
 
-  const fajrStreak = computeStreak(r=>r.faith && r.faith.fajr==='caught');
+  const fajrStreak = computeStreak(r=>r.faith && r.faith.fajr==='caught', null, all);
   html += flameStat('FAJR STREAK', fajrStreak, 'var(--faith)');
 
   const sc = faithScore(day);
@@ -2309,15 +2347,16 @@ function renderFaith(){
 
   html += sectionLabel('MONTH TO DATE');
   const monthPrefix = EDIT_DATE.slice(0,7);
-  const avg = monthAvg(faithScore, monthPrefix);
+  const avg = monthAvg(faithScore, monthPrefix, all);
   html += '<div class="card">'+progressRow('Faith consistency', avg, avg+'%', 'var(--faith)')+'</div>';
 
-  const faithPrevAvg = monthAvg(faithScore, prevMonthPrefix());
+  const faithPrevAvg = monthAvg(faithScore, prevMonthPrefix(), all);
   html += sectionLabel('THIS MONTH VS LAST MONTH','var(--faith)');
   html += '<div class="card">'+momCompareHtml(avg, faithPrevAvg, 'var(--faith)')+'</div>';
 
   html += '<button class="save-btn" id="save-faith">'+saveBtnLabel()+'</button>';
   s.innerHTML = html;
+  renderFaithCountdown();
   wireCmpArrows(s, 'faith', renderFaith);
 
   document.getElementById('open-faith-report').addEventListener('click',()=>{
@@ -2712,6 +2751,57 @@ function renderHealthReport(s){
 }
 
 /* ============ HEALTH ============ */
+function sportSectionHtml(h){
+  const SPORT_CATS=[
+    {key:'squats',label:'Squats',items:[
+      ['squats','Squats'],['heelToe','Heel to Toe'],['weightShifting','Weight Shifting'],
+      ['elbowCircle','Elbow Circle'],['forwardSlides','Forward Slides'],
+      ['diagonalWave','Diagonal Wave'],['plyoLunges','Plyo Lunges']
+    ]},
+    {key:'abs',label:'Abs',items:[
+      ['mtClimbing','Mt Climbing'],['inOut','In &amp; Out'],['plankHipDips','Plank Hip Dips'],
+      ['twists','Twists'],['bicycleCrunch','Bicycle Crunch'],['cableCrunch','Cable Crunch'],
+      ['abWheelRollout','Ab Wheel Rollout'],['sidePlank','Side Plank'],['hangingLegRaise','Hanging Leg Raise']
+    ]},
+    {key:'cardio',label:'Cardio/Warm-up',items:[
+      ['rope','Rope'],['armCircle','Arm Circle']
+    ]}
+  ];
+  const _s=o=>Object.values(o||{}).reduce((a,b)=>a+b,0);
+  let out='';
+  SPORT_CATS.forEach(cat=>{
+    const catData=(h.sport||{})[cat.key]||{};
+    const catTotal=_s(catData);
+    if(!sportSel[cat.key]){
+      const best=cat.items.reduce((a,b)=>(catData[b[0]]||0)>(catData[a[0]]||0)?b:a,cat.items[0]);
+      if((catData[best[0]]||0)>0) sportSel[cat.key]=best[0];
+    }
+    const sel=sportSel[cat.key];
+    let opts='<option value=""'+(sel?'':' selected')+'>— Select exercise —</option>';
+    cat.items.forEach(([k,lbl])=>{
+      const cnt=catData[k]||0;
+      opts+='<option value="'+k+'"'+(sel===k?' selected':'')+'>'+lbl+(cnt>0?' ('+cnt+')':'')+'</option>';
+    });
+    out+='<div class="card" style="margin-bottom:10px">';
+    out+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">';
+    out+='<span style="font-family:var(--mono);font-size:9px;letter-spacing:1px;color:var(--health)">'+cat.label.toUpperCase()+'</span>';
+    out+='<span style="font-family:var(--mono);font-size:11px;color:'+(catTotal>0?'var(--health)':'var(--mute)')+'">'+catTotal+' pts</span>';
+    out+='</div>';
+    out+='<select class="sport-sel" data-cat="'+cat.key+'" style="width:100%;background:var(--track-bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-family:var(--sans);font-size:13px;color:var(--text);cursor:pointer;margin-bottom:'+(sel?'10px':'0')+'">'+opts+'</select>';
+    if(sel){
+      const selLabel=(cat.items.find(([k])=>k===sel)||[])[1]||sel;
+      const cnt=catData[sel]||0;
+      out+='<div class="checkline"><span style="flex:1;font-size:13px">'+selLabel+'</span>';
+      out+='<div class="count-btns">';
+      out+='<button class="sport-cnt" data-cat="'+cat.key+'" data-key="'+sel+'" data-d="-1">−</button>';
+      out+='<span class="count-val">'+cnt+'</span>';
+      out+='<button class="sport-cnt" data-cat="'+cat.key+'" data-key="'+sel+'" data-d="1">+</button>';
+      out+='</div></div>';
+    }
+    out+='</div>';
+  });
+  return out;
+}
 function renderHealth(){
   const s = document.getElementById('s-health');
   if(healthReportOpen){ renderHealthReport(s); return; }
@@ -2815,6 +2905,9 @@ function renderHealth(){
   html += '<div class="checkline" data-movement="walkingMinutes"><span style="flex:1">Walking</span><span style="font-family:var(--mono);font-size:11px;color:'+(walkVal>0?'var(--health)':'var(--mute)')+'">'+( walkVal>0?walkVal+' min':'--')+'</span></div>';
   html += '</div>';
 
+  html += sectionLabel('SPORT', 'var(--health)');
+  html += sportSectionHtml(h);
+
   html += sectionLabel('NOTES', 'var(--health)');
   html += '<div class="card">'+'<textarea class="input textarea" id="health-notes" placeholder="Notes for today">'+(h.notes||'')+'</textarea></div>';
   html += sectionLabel('MONTH TO DATE');
@@ -2845,6 +2938,18 @@ function renderHealth(){
   });
   s.querySelectorAll('[data-movement]').forEach(row=>{
     row.addEventListener('click', ()=> openMovementModal(row.dataset.movement));
+  });
+  s.querySelectorAll('.sport-sel').forEach(sel=>{
+    sel.addEventListener('change', ()=>{ sportSel[sel.dataset.cat]=sel.value||null; renderHealth(); });
+  });
+  s.querySelectorAll('.sport-cnt').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const cat=btn.dataset.cat, key=btn.dataset.key, d=parseInt(btn.dataset.d);
+      if(!h.sport) h.sport={};
+      if(!h.sport[cat]) h.sport[cat]={};
+      h.sport[cat][key]=Math.max(0,(h.sport[cat][key]||0)+d);
+      renderHealth();
+    });
   });
   const plankStart=document.getElementById('plank-start');
   const plankStop=document.getElementById('plank-stop');
@@ -5489,15 +5594,155 @@ function migrateMusicSessions(){
   localStorage.setItem('lo_music_v3','1');
 }
 
+/* ============ PROFILE ============ */
+function applyProfileNickname(){
+  const nick=DB.profile().nickname||'DAVYDENKO';
+  const bn=document.getElementById('brand-name');
+  const fn=document.getElementById('faceid-name');
+  if(bn) bn.textContent=nick;
+  if(fn) fn.textContent=nick;
+}
+
+const PROFILE_AVATARS=[
+  {key:'builtin:lion',e:'🦁'},{key:'builtin:wave',e:'🌊'},{key:'builtin:star',e:'⭐'},
+  {key:'builtin:mountain',e:'⛰'},{key:'builtin:flame',e:'🔥'},{key:'builtin:crescent',e:'🌙'}
+];
+
+function compressAvatar(file,cb){
+  const img=new Image(),url=URL.createObjectURL(file);
+  img.onload=function(){
+    const cv=document.createElement('canvas'); cv.width=cv.height=160;
+    const ctx=cv.getContext('2d');
+    const sz=Math.min(img.width,img.height);
+    ctx.drawImage(img,(img.width-sz)/2,(img.height-sz)/2,sz,sz,0,0,160,160);
+    URL.revokeObjectURL(url); cb(cv.toDataURL('image/jpeg',0.75));
+  };
+  img.src=url;
+}
+
+function _profileOverlayHtml(pre,p,isNew){
+  const sel=p.avatar||'builtin:lion';
+  const avHtml=PROFILE_AVATARS.map(a=>
+    `<div class="profile-avatar-item${(!p.avatarPhoto&&a.key===sel)?' selected':''}" data-av="${a.key}">${a.e}</div>`
+  ).join('')+
+  `<div class="profile-avatar-item${p.avatarPhoto?' selected':''}" data-av="upload" id="${pre}-upload-btn">📷</div>`+
+  `<input type="file" id="${pre}-file-input" accept="image/*" style="display:none">`;
+  const closeBtn=isNew?'':
+    `<button onclick="document.getElementById('${pre}-overlay').remove()" `+
+    `style="position:absolute;top:14px;right:16px;background:transparent;border:none;color:var(--mute);font-size:22px;cursor:pointer;line-height:1">×</button>`;
+  const gM=p.gender==='male'?' selected':'', gF=p.gender==='female'?' selected':'';
+  const nick=(p.nickname||'').replace(/"/g,'&quot;');
+  const btnDisabled=(isNew&&!p.nickname)?' disabled':'';
+  return `<div class="profile-card" style="position:relative">
+    ${closeBtn}
+    <div style="text-align:center;margin-bottom:20px">
+      <img src="image_holographic_logo-825a1b.png" style="width:44px;height:44px;margin-bottom:8px">
+      <div style="font-family:var(--mono);font-size:9px;letter-spacing:3px;color:var(--green)">${isNew?'WELCOME TO LIFE OS':'PROFILE &amp; SETTINGS'}</div>
+      <div style="font-family:var(--sans);font-size:11px;color:var(--mute);margin-top:4px">${isNew?"Let's set up your profile":'Edit your profile below'}</div>
+    </div>
+    <div style="font-family:var(--mono);font-size:9px;color:var(--mute);letter-spacing:1px;margin-bottom:8px">AVATAR</div>
+    <div class="profile-avatar-row" id="${pre}-avatar-row">${avHtml}</div>
+    <div id="${pre}-photo-preview" style="${p.avatarPhoto?'':'display:none'};text-align:center;margin-bottom:12px">
+      <img id="${pre}-photo-img" src="${p.avatarPhoto||''}" style="width:64px;height:64px;border-radius:50%;object-fit:cover;border:2px solid var(--green)">
+    </div>
+    <div style="font-family:var(--mono);font-size:9px;color:var(--mute);letter-spacing:1px;margin-bottom:6px">NICKNAME <span style="color:var(--red)">*</span></div>
+    <input type="text" id="${pre}-nickname" class="profile-input" placeholder="What do you go by?" maxlength="30" value="${nick}">
+    <div style="font-family:var(--mono);font-size:9px;color:var(--mute);letter-spacing:1px;margin-bottom:6px;margin-top:14px">GENDER <span style="font-size:8px;color:var(--mute)">(optional)</span></div>
+    <div class="profile-gender-row" id="${pre}-gender-row">
+      <button class="profile-gender-pill${gM}" data-g="male">Male</button>
+      <button class="profile-gender-pill${gF}" data-g="female">Female</button>
+    </div>
+    <div style="font-family:var(--mono);font-size:9px;color:var(--mute);letter-spacing:1px;margin-bottom:6px;margin-top:14px">DATE OF BIRTH <span style="font-size:8px;color:var(--mute)">(optional)</span></div>
+    <input type="date" id="${pre}-dob" class="profile-input" value="${p.dob||''}">
+    <button id="${pre}-save-btn" class="profile-save-btn"${btnDisabled} onclick="saveProfileForm('${pre}',${isNew})">${isNew?'Let\'s go →':'Save'}</button>
+  </div>`;
+}
+
+function _wireProfileForm(pre){
+  document.querySelectorAll(`#${pre}-avatar-row .profile-avatar-item`).forEach(el=>{
+    el.addEventListener('click',function(){
+      if(this.dataset.av==='upload'){ document.getElementById(pre+'-file-input').click(); return; }
+      document.querySelectorAll(`#${pre}-avatar-row .profile-avatar-item`).forEach(x=>x.classList.remove('selected'));
+      this.classList.add('selected');
+      document.getElementById(pre+'-photo-preview').style.display='none';
+    });
+  });
+  const fi=document.getElementById(pre+'-file-input');
+  if(fi) fi.addEventListener('change',function(){
+    const f=this.files[0]; if(!f) return;
+    compressAvatar(f,function(d){
+      document.getElementById(pre+'-photo-img').src=d;
+      document.getElementById(pre+'-photo-preview').style.display='block';
+      document.querySelectorAll(`#${pre}-avatar-row .profile-avatar-item`).forEach(x=>x.classList.remove('selected'));
+      document.getElementById(pre+'-upload-btn').classList.add('selected');
+    });
+  });
+  document.querySelectorAll(`#${pre}-gender-row .profile-gender-pill`).forEach(pill=>{
+    pill.addEventListener('click',function(){
+      const was=this.classList.contains('selected');
+      document.querySelectorAll(`#${pre}-gender-row .profile-gender-pill`).forEach(p=>p.classList.remove('selected'));
+      if(!was) this.classList.add('selected');
+    });
+  });
+  const nickEl=document.getElementById(pre+'-nickname');
+  const saveBtn=document.getElementById(pre+'-save-btn');
+  if(nickEl&&saveBtn) nickEl.addEventListener('input',function(){ saveBtn.disabled=!this.value.trim(); });
+}
+
+function _readProfileForm(pre){
+  const nick=document.getElementById(pre+'-nickname').value.trim();
+  const selAv=document.querySelector(`#${pre}-avatar-row .profile-avatar-item.selected`);
+  const avKey=selAv?selAv.dataset.av:null;
+  const hasPhoto=document.getElementById(pre+'-photo-preview').style.display!=='none';
+  const selG=document.querySelector(`#${pre}-gender-row .profile-gender-pill.selected`);
+  return {
+    nickname: nick,
+    gender: selG?selG.dataset.g:null,
+    dob: document.getElementById(pre+'-dob').value||null,
+    avatar: (!hasPhoto&&avKey&&avKey!=='upload')?avKey:'builtin:lion',
+    avatarPhoto: hasPhoto?document.getElementById(pre+'-photo-img').src:null
+  };
+}
+
+function saveProfileForm(pre,isNew){
+  const p=_readProfileForm(pre);
+  if(!p.nickname) return;
+  DB.saveProfile(p);
+  document.getElementById(pre+'-overlay').remove();
+  applyProfileNickname();
+  if(isNew) renderAll(); else renderHome();
+}
+
+function showOnboarding(){
+  if(document.getElementById('ob-overlay')) return;
+  const el=document.createElement('div');
+  el.id='ob-overlay'; el.className='profile-overlay';
+  el.innerHTML=_profileOverlayHtml('ob',{},true);
+  document.getElementById('modal-root').appendChild(el);
+  _wireProfileForm('ob');
+}
+
+function showProfileSettings(){
+  const existing=document.getElementById('st-overlay');
+  if(existing){ existing.remove(); return; }
+  const el=document.createElement('div');
+  el.id='st-overlay'; el.className='profile-overlay';
+  el.innerHTML=_profileOverlayHtml('st',DB.profile(),false);
+  document.getElementById('modal-root').appendChild(el);
+  _wireProfileForm('st');
+}
+
 function doInit(){
   migrateMusicSessions();
   backfillTransactionIds();
   renderAll();
+  applyProfileNickname();
   animateCardsIn(document.getElementById('s-home'));
   renderFaithCountdown();
   if(swalatInterval) clearInterval(swalatInterval);
   swalatInterval = setInterval(renderFaithCountdown, 1000);
   checkAndNotify(computeNeglectGaps());
+  if(!DB.profile().nickname) showOnboarding();
 }
 checkFaceIdLock(doInit);
 </script>
