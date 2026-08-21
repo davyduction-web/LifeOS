@@ -277,6 +277,8 @@ let musicReportOpen = false;
 let musicReportPeriod = 'month';
 let calMonthOffset = 0;
 let convPeriod = 'weekly';
+let sbPeriod = 'daily';
+let _txCountMap = null;
 let swalatInterval = null;
 let timeElapsedInterval = null;
 let cdCurrentPrayer = null;
@@ -411,16 +413,23 @@ function musicScore(d){
   const qualityPts = (avgQuality/5)*20;
   return Math.round(projectPts+minutePts+qualityPts);
 }
-function financeScore(d){ return d.finance.logged ? 100 : 0; }
-function dayScore(d){
-  return Math.round((faithScore(d)+healthScore(d)+musicScore(d)+financeScore(d)+growthScore(d))/5);
+function financeScore(d, dateStr){
+  if(!_txCountMap) _buildTxMap();
+  return Math.min((_txCountMap[dateStr||'']||0)*10, 100);
+}
+function dayScore(d, dateStr){
+  return Math.round((faithScore(d)+healthScore(d)+musicScore(d)+financeScore(d,dateStr)+growthScore(d))/5);
 }
 function monthAvg(scoreFn, monthPrefix, cachedAll){
   const all = cachedAll || DB.allDays();
   const keys = Object.keys(all).filter(k=>k.startsWith(monthPrefix));
   if(!keys.length) return 0;
-  let sum=0; keys.forEach(k=>sum+=scoreFn(all[k]));
+  let sum=0; keys.forEach(k=>sum+=scoreFn(all[k],k));
   return Math.round(sum/keys.length);
+}
+function _buildTxMap(){
+  _txCountMap = {};
+  DB.transactions().forEach(t=>{ _txCountMap[t.date]=(_txCountMap[t.date]||0)+1; });
 }
 function prevMonthPrefix(){
   const d = new Date(EDIT_DATE+' 00:00:00');
@@ -482,7 +491,7 @@ function computeStreak(testFn, fromDate, cachedAll){
   while(true){
     const ds = d.toISOString().slice(0,10);
     const rec = all[ds];
-    if(rec && testFn(rec)){ count++; d.setDate(d.getDate()-1); }
+    if(rec && testFn(rec,ds)){ count++; d.setDate(d.getDate()-1); }
     else break;
   }
   return count;
@@ -762,7 +771,8 @@ function isoCubeHtml(scores){
   svg+='</svg>';
   return svg;
 }
-function fiveSliceDonutHtml(scores){
+function fiveSliceDonutHtml(scores, label){
+  label = label || 'SCORE TODAY';
   const cats=[
     {k:'faith',   c:'var(--faith)'  },
     {k:'health',  c:'var(--health)' },
@@ -789,7 +799,7 @@ function fiveSliceDonutHtml(scores){
     svg+=`<g style="filter:brightness(0.5)"><ellipse cx="${cx}" cy="${topcy+depth}" rx="${rx}" ry="${ry}" fill="var(--track-bg)"/></g>`;
     svg+=`<ellipse cx="${cx}" cy="${topcy}" rx="${rx}" ry="${ry}" fill="var(--track-bg)"/>`;
     svg+='</svg>';
-    const emptyLine=`<div style="font-family:var(--mono);font-size:9px;color:var(--mute);letter-spacing:0.05em;margin-top:4px">SCORE TODAY</div>`+
+    const emptyLine=`<div style="font-family:var(--mono);font-size:9px;color:var(--mute);letter-spacing:0.05em;margin-top:4px">${label}</div>`+
       `<div style="font-family:DM Serif Display,serif;font-size:28px;font-weight:700;color:var(--mute);line-height:1;margin-top:1px">0</div>`;
     return `<div style="text-align:center;padding:8px 0">${svg}${emptyLine}</div>`;
   }
@@ -852,7 +862,7 @@ function fiveSliceDonutHtml(scores){
 
   svg+='</svg>';
   // Score label + number sit below the pie — same hierarchy as Code Score widget (mono label above, serif number below)
-  const statLine=`<div style="font-family:var(--mono);font-size:9px;color:var(--mute);letter-spacing:0.05em;margin-top:4px">SCORE TODAY</div>`+
+  const statLine=`<div style="font-family:var(--mono);font-size:9px;color:var(--mute);letter-spacing:0.05em;margin-top:4px">${label}</div>`+
     `<div style="font-family:DM Serif Display,serif;font-size:28px;font-weight:700;color:var(--text);line-height:1;margin-top:1px">${avg}</div>`;
   return `<div style="text-align:center;padding:8px 0">${svg}${statLine}</div>`;
 }
@@ -1522,7 +1532,7 @@ function openDayDetail(dateStr){
     openModal('<div class="modal-title">'+label+'</div><div style="font-size:12px;color:var(--mute)">Nothing was logged this day.</div>'+_ea);
     return;
   }
-  const sc = dayScore(rec);
+  const sc = dayScore(rec, dateStr);
   let html = '<div class="modal-title">'+label+' &middot; '+sc+'/100</div>';
 
   html += '<div style="font-family:var(--mono);font-size:9px;color:var(--faith);letter-spacing:1px;margin:4px 0 6px">FAITH</div>';
@@ -1734,7 +1744,7 @@ function calendarHtml(all, calY, calM, calMode){
   for(let d=1;d<=daysInMonth;d++){
     const ds=prefix+'-'+String(d).padStart(2,'0');
     const rec=all[ds];
-    scores[d]=rec?dayScore(rec):null;
+    scores[d]=rec?dayScore(rec,ds):null;
   }
   const logged=Object.values(scores).filter(s=>s!==null);
   const bestScore=logged.length?Math.max(...logged):null;
@@ -1742,7 +1752,7 @@ function calendarHtml(all, calY, calM, calMode){
   const monthAve=logged.length?Math.round(logged.reduce((a,b)=>a+b,0)/logged.length):null;
   const bestDay=bestScore!==null?parseInt(Object.keys(scores).find(d=>scores[d]===bestScore)):null;
   const worstDay=worstScore!==null?parseInt(Object.keys(scores).find(d=>scores[d]===worstScore)):null;
-  const streak=computeStreak(r=>dayScore(r)>0);
+  const streak=computeStreak((r,ds)=>dayScore(r,ds)>0);
   const isLight=document.documentElement.dataset.theme==='light';
   let h='';
   // Stats row
@@ -1823,11 +1833,13 @@ function calendarHtml(all, calY, calM, calMode){
 
 /* ============ HOME ============ */
 function renderHome(){
+  _txCountMap = null;
   const s = document.getElementById('s-home');
   const todayRec = DB.day(TODAY);
-  const scores = {faith:faithScore(todayRec), health:healthScore(todayRec), music:musicScore(todayRec), finance:financeScore(todayRec), growth:growthScore(todayRec)};
-  const total = dayScore(todayRec);
+  const scores = {faith:faithScore(todayRec), health:healthScore(todayRec), music:musicScore(todayRec), finance:financeScore(todayRec,TODAY), growth:growthScore(todayRec)};
+  const total = dayScore(todayRec, TODAY);
   const monthPrefix = TODAY.slice(0,7);
+  const convAll = DB.allDays();
   const cats = [['Faith','var(--faith)',scores.faith],['Health','var(--health)',scores.health],['Music','var(--music)',scores.music],['Finance','var(--finance)',scores.finance],['Growth','var(--growth)',scores.growth]];
   let html = '<div class="datebar">'+new Date().toDateString().toUpperCase()+'</div>';
   const _neglect=neglectBannerHtml(computeNeglectGaps());
@@ -1835,7 +1847,7 @@ function renderHome(){
   const yDate = new Date(TODAY); yDate.setDate(yDate.getDate()-1);
   const yStr = yDate.toISOString().slice(0,10);
   const yRec = DB.allDays()[yStr];
-  const yScore = yRec ? dayScore(yRec) : null;
+  const yScore = yRec ? dayScore(yRec, yStr) : null;
   const delta = yScore===null ? null : total - yScore;
   const deltaHtml = delta===null ? '<span class="delta-pill" style="background:var(--track-bg);color:var(--mute)">No data yesterday</span>' :
     delta>=0 ? '<span class="delta-pill" style="background:var(--delta-up-bg);color:var(--green)">&#8593; '+delta+' vs yesterday</span>' :
@@ -1865,7 +1877,7 @@ function renderHome(){
     const dd = new Date(TODAY); dd.setDate(dd.getDate()-i);
     const ds = dd.toISOString().slice(0,10);
     const rec = DB.allDays()[ds];
-    trendDays.push({date:dd, score: rec?dayScore(rec):null});
+    trendDays.push({date:dd, score: rec?dayScore(rec,ds):null});
   }
   const validScores = trendDays.filter(t=>t.score!==null).map(t=>t.score);
   const maxS = validScores.length?Math.max(...validScores,1):100;
@@ -1910,8 +1922,41 @@ function renderHome(){
   html += sectionLabel('CATEGORY BALANCE TODAY','var(--home)');
   html += '<div class="card">'+isoCubeHtml(scores)+'</div>';
 
+  // Score Breakdown — period-averaged pie (reuses convAll already loaded above)
+  let sbKeys;
+  if(sbPeriod==='daily'){
+    sbKeys = convAll[TODAY] ? [TODAY] : [];
+  } else if(sbPeriod==='weekly'){
+    const sbWd=new Date(TODAY); const sbDsm=(sbWd.getDay()+6)%7; sbWd.setDate(sbWd.getDate()-sbDsm);
+    const sbWeekStart=sbWd.toISOString().slice(0,10);
+    sbKeys=Object.keys(convAll).filter(k=>k>=sbWeekStart&&k<=TODAY);
+  } else {
+    sbKeys=Object.keys(convAll).filter(k=>k.startsWith(monthPrefix));
+  }
+  const sbLabel = sbPeriod==='daily'?'SCORE TODAY':sbPeriod==='weekly'?'SCORE THIS WEEK':'SCORE THIS MONTH';
+  let sbScores;
+  if(sbPeriod==='daily'){
+    sbScores = scores;
+  } else {
+    const _sbFns=[
+      {k:'faith',  fn:faithScore },
+      {k:'health', fn:healthScore},
+      {k:'music',  fn:musicScore },
+      {k:'finance',fn:financeScore},
+      {k:'growth', fn:growthScore}
+    ];
+    sbScores={};
+    _sbFns.forEach(({k,fn})=>{
+      sbScores[k]=sbKeys.length?Math.round(sbKeys.reduce((sum,ds)=>sum+fn(convAll[ds],ds),0)/sbKeys.length):0;
+    });
+  }
+  const sbPeriodSel='<div class="btn-group" style="margin-bottom:8px">'
+    +'<button class="opt-btn score-period-btn'+(sbPeriod==='daily'?' sel':'')+'" data-score-period="daily">Daily</button>'
+    +'<button class="opt-btn score-period-btn'+(sbPeriod==='weekly'?' sel':'')+'" data-score-period="weekly">Weekly</button>'
+    +'<button class="opt-btn score-period-btn'+(sbPeriod==='monthly'?' sel':'')+'" data-score-period="monthly">Monthly</button>'
+    +'</div>';
   html += sectionLabel('SCORE BREAKDOWN','var(--home)');
-  html += '<div class="card">'+fiveSliceDonutHtml(scores)+'</div>';
+  html += '<div class="card">'+sbPeriodSel+fiveSliceDonutHtml(sbScores, sbLabel)+'</div>';
 
   html += sectionLabel('PERSONAL RECORDS','var(--amber)');
   const bests=computeAllTimeBests();
@@ -1928,7 +1973,7 @@ function renderHome(){
   html += sectionLabel('THIS MONTH BY CATEGORY');
   html += '<div class="cat-scroll">';
   cats.forEach(c=>{
-    const avg = monthAvg(d=> c[0]==='Faith'?faithScore(d):c[0]==='Health'?healthScore(d):c[0]==='Music'?musicScore(d):c[0]==='Finance'?financeScore(d):growthScore(d), monthPrefix);
+    const avg = monthAvg((d,k)=> c[0]==='Faith'?faithScore(d):c[0]==='Health'?healthScore(d):c[0]==='Music'?musicScore(d):c[0]==='Finance'?financeScore(d,k):growthScore(d),monthPrefix);
     html += '<div class="card" style="padding:10px">'+'<div style="text-align:center">'+ringSvg(avg,c[1],avg,52)+'<div style="font-family:var(--mono);font-size:8px;color:var(--mute);margin-top:4px">'+c[0].toUpperCase()+'</div></div></div>';
   });
   html += '</div>';
@@ -1937,12 +1982,11 @@ function renderHome(){
   html += sectionLabel('THIS YEAR BY CATEGORY');
   html += '<div class="cat-scroll">';
   cats.forEach(c=>{
-    const avg = monthAvg(d=> c[0]==='Faith'?faithScore(d):c[0]==='Health'?healthScore(d):c[0]==='Music'?musicScore(d):c[0]==='Finance'?financeScore(d):growthScore(d), yearPrefix);
+    const avg = monthAvg((d,k)=> c[0]==='Faith'?faithScore(d):c[0]==='Health'?healthScore(d):c[0]==='Music'?musicScore(d):c[0]==='Finance'?financeScore(d,k):growthScore(d),yearPrefix);
     html += '<div class="card" style="padding:10px">'+'<div style="text-align:center">'+ringSvg(avg,c[1],avg,52)+'<div style="font-family:var(--mono);font-size:8px;color:var(--mute);margin-top:4px">'+c[0].toUpperCase()+'</div></div></div>';
   });
   html += '</div>';
 
-  const convAll=DB.allDays();
   let convKeys;
   if(convPeriod==='daily'){
     convKeys=Object.keys(convAll).filter(k=>k===TODAY);
@@ -1957,9 +2001,9 @@ function renderHome(){
     convKeys=Object.keys(convAll).filter(k=>k.startsWith(monthPrefix));
   }
   const convRangeLabel=convPeriod==='daily'?'TODAY':convPeriod==='weekly'?'THIS WEEK':'THIS MONTH';
-  const convCount=convKeys.filter(ds=>{ const r=convAll[ds]; return [faithScore(r),healthScore(r),musicScore(r),financeScore(r),growthScore(r)].filter(s=>s>=70).length>=3; }).length;
+  const convCount=convKeys.filter(ds=>{ const r=convAll[ds]; return [faithScore(r),healthScore(r),musicScore(r),financeScore(r,ds),growthScore(r)].filter(s=>s>=70).length>=3; }).length;
   const convScorers=[faithScore,healthScore,musicScore,financeScore,growthScore];
-  const convHitRates=convScorers.map(fn=>convKeys.length?convKeys.reduce((sum,ds)=>sum+fn(convAll[ds]),0)/convKeys.length/100:0);
+  const convHitRates=convScorers.map(fn=>convKeys.length?convKeys.reduce((sum,ds)=>sum+fn(convAll[ds],ds),0)/convKeys.length/100:0);
   const convPeriodSel='<div class="btn-group" style="margin-bottom:8px">'
     +'<button class="opt-btn conv-period-btn'+(convPeriod==='daily'?' sel':'')+'" data-conv-period="daily">Daily</button>'
     +'<button class="opt-btn conv-period-btn'+(convPeriod==='weekly'?' sel':'')+'" data-conv-period="weekly">Weekly</button>'
@@ -2034,6 +2078,26 @@ function renderHome(){
     '<div style="font-size:10px;color:var(--mute);margin-top:10px">Export saves everything to a file you keep yourself. Import restores from a file on a new device. Nothing is sent anywhere.</div>'+
     '</div>';
 
+  const dismissedTs = localStorage.getItem('lo_backup_reminder_dismissed');
+  let brRefDate = null;
+  if (lastExp) {
+    brRefDate = new Date(lastExp);
+  } else {
+    const firstDay = Object.keys(convAll).sort()[0];
+    if (firstDay) brRefDate = new Date(firstDay);
+  }
+  if (brRefDate) {
+    const daysSince = Math.floor((Date.now() - brRefDate.getTime()) / 86400000);
+    const dismissed = dismissedTs ? new Date(dismissedTs) : null;
+    const daysSinceDismiss = dismissed ? Math.floor((Date.now() - dismissed.getTime()) / 86400000) : Infinity;
+    if (daysSince >= 5 && daysSinceDismiss >= 5) {
+      html += '<div id="backup-reminder" style="background:rgba(255,180,0,0.08);border:1px solid rgba(255,180,0,0.25);border-radius:14px;padding:12px 14px;margin-top:6px;display:flex;align-items:center;justify-content:space-between;gap:10px">'
+        +'<div style="font-size:11px;color:var(--amber)">&#9888; No backup in '+daysSince+' days. Export your data to stay safe.</div>'
+        +'<button id="dismiss-backup-reminder" style="background:none;border:1px solid var(--border);border-radius:8px;font-family:var(--mono);font-size:10px;color:var(--mute);padding:4px 10px;cursor:pointer;white-space:nowrap;flex-shrink:0">Snooze</button>'
+        +'</div>';
+    }
+  }
+
   s.innerHTML = html;
   renderTimeElapsed();
   renderFaceIdToggle();
@@ -2054,6 +2118,14 @@ function renderHome(){
   });
   s.querySelectorAll('.conv-period-btn').forEach(b=>{
     b.addEventListener('click',()=>{ convPeriod=b.dataset.convPeriod; renderHome(); });
+  });
+  s.querySelectorAll('.score-period-btn').forEach(b=>{
+    b.addEventListener('click',()=>{ sbPeriod=b.dataset.scorePeriod; renderHome(); });
+  });
+  const brDismissBtn = document.getElementById('dismiss-backup-reminder');
+  if (brDismissBtn) brDismissBtn.addEventListener('click', () => {
+    localStorage.setItem('lo_backup_reminder_dismissed', new Date().toISOString());
+    renderHome();
   });
   document.getElementById('export-data').addEventListener('click', exportData);
   document.getElementById('import-data').addEventListener('click', ()=> document.getElementById('import-file').click());
@@ -3915,6 +3987,7 @@ function renderFinanceReport(s){
 }
 
 function renderFinance(){
+  _txCountMap = null;
   const s = document.getElementById('s-finance');
   if(financeReportOpen){ renderFinanceReport(s); return; }
 
@@ -4543,6 +4616,18 @@ function renderGrowth(){
   html += sectionLabel('THIS MONTH VS LAST MONTH','var(--growth)');
   html += '<div class="card">'+momCompareHtml(avg, growthPrevAvg, 'var(--growth)')+'</div>';
 
+  const grStreak = computeStreak(r => {
+    const g = r.growth;
+    if (!g) return false;
+    if (g.reps || g.checks) {
+      return GR_REPS_KEYS.some(k => (g.reps||{})[k] > 0) ||
+             GR_CHK_KEYS.some(k => (g.checks||{})[k] === 'yes');
+    }
+    return GROWTH_ITEMS.some(k => !!g[k]);
+  });
+  html += sectionLabel('STREAK', 'var(--growth)');
+  html += flameStat('GROWTH STREAK', grStreak, 'var(--growth)');
+
   html += '<button class="save-btn" id="save-growth">'+saveBtnLabel()+'</button>';
   s.innerHTML = html;
   wireCmpArrows(s, 'growth', renderGrowth);
@@ -4795,7 +4880,7 @@ function renderReview(){
   function weekAvgScore(offset){
     const wd = getWeekDays(offset).filter(d=>d.rec);
     if(!wd.length) return null;
-    return Math.round(wd.reduce((a,d)=>a+dayScore(d.rec),0)/wd.length);
+    return Math.round(wd.reduce((a,d)=>a+dayScore(d.rec,d.str),0)/wd.length);
   }
 
   const wDays = getWeekDays(reviewWeekOffset);
@@ -4851,7 +4936,7 @@ function renderReview(){
     ];
     const avgs=rCats.map(cat=>{
       const days=wDays.filter(d=>d.rec&&d.rec[cat.key]);
-      return days.length?Math.round(days.reduce((a,d)=>a+cat.fn(d.rec),0)/days.length):null;
+      return days.length?Math.round(days.reduce((a,d)=>a+cat.fn(d.rec,d.str),0)/days.length):null;
     });
     html+='<div class="card">'+weekRadarSvg(avgs[0],avgs[1],avgs[2],avgs[3],avgs[4])+'</div>';
   })();
@@ -4876,7 +4961,7 @@ function renderReview(){
         if(!day.rec||!day.rec[cat.key]){
           g+='<div style="height:26px;border-radius:3px;background:var(--track-bg);opacity:0.35"></div>';
         } else {
-          const sc=cat.fn(day.rec);
+          const sc=cat.fn(day.rec,day.str);
           const isGreen=sc>=50;
           const intensity=isGreen?(sc-50)/50:(50-sc)/50;
           const bgOp=(0.12+intensity*0.38).toFixed(2);
@@ -4907,7 +4992,7 @@ function renderReview(){
       const entry={label:wd[0].date.toLocaleDateString('en-US',{month:'short',day:'numeric'})};
       trendCats.forEach(cat=>{
         const days=wd.filter(d=>d.rec&&d.rec[cat.key]);
-        entry[cat.key]=days.length?Math.round(days.reduce((a,d)=>a+cat.fn(d.rec),0)/days.length):null;
+        entry[cat.key]=days.length?Math.round(days.reduce((a,d)=>a+cat.fn(d.rec,d.str),0)/days.length):null;
       });
       weekData.push(entry);
     }
@@ -5225,7 +5310,7 @@ function renderReview(){
     for(let wso=0;;wso++){
       const wd2 = getWeekDays(wso).filter(d=>d.rec);
       if(!wd2.length) break;
-      const avg2 = wd2.reduce((a,d)=>a+dayScore(d.rec),0)/wd2.length;
+      const avg2 = wd2.reduce((a,d)=>a+dayScore(d.rec,d.str),0)/wd2.length;
       if(avg2>=70) count++; else break;
       if(wso>500) break;
     }
