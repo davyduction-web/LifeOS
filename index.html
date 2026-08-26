@@ -195,13 +195,13 @@ button:active{transform:scale(0.96)}
   <div class="nav">
     <button class="fab" id="fab-btn" aria-label="Quick log"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M12 5v14M5 12h14"/></svg></button>
     <button class="nb" data-tab="home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12l9-9 9 9M5 10v10h14V10"/></svg>Home</button>
+    <button class="nb" data-tab="planning"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/></svg>Plan</button>
     <button class="nb" data-tab="faith"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1111.2 3 7 7 0 0021 12.8z"/></svg>Faith</button>
     <button class="nb" data-tab="health"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.8 4.6a5.5 5.5 0 00-7.8 0L12 5.6l-1-1a5.5 5.5 0 00-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 000-7.8z"/></svg>Health</button>
     <button class="nb" data-tab="music"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13M9 18a3 3 0 11-6 0 3 3 0 016 0zm12-2a3 3 0 11-6 0 3 3 0 016 0z"/></svg>Music</button>
     <button class="nb" data-tab="finance"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M9 10a3 3 0 013-1c2 0 3 1 3 2s-1 2-3 2-3 1-3 2 1 2 3 2a3 3 0 003-1"/></svg>Finance</button>
     <button class="nb" data-tab="growth"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22v-9M12 13c-4 0-7-3-7-7 4 0 7 3 7 7zm0 0c4 0 7-3 7-7-4 0-7 3-7 7z"/></svg>Growth</button>
     <button class="nb" data-tab="review"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="12" width="4" height="9"/><rect x="10" y="7" width="4" height="14"/><rect x="17" y="3" width="4" height="18"/></svg>Review</button>
-    <button class="nb" data-tab="planning"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/></svg>Plan</button>
   </div>
 </div>
 
@@ -5620,7 +5620,7 @@ function timelineBlockHtml(item,hourPx,leftPx){
   leftPx=leftPx===undefined?48:leftPx;
   const y=timeToY(item.start,hourPx);
   const h=durationPx(item.start,item.end,hourPx);
-  const cv=item.color?'var(--'+item.color+')':'var(--planning)';
+  const cv='var(--planning)';
   const stk=item.done?'line-through':'none';
   let inner='';
   if(item.kind==='apt'){
@@ -5646,7 +5646,7 @@ function timelineBlockHtml(item,hourPx,leftPx){
 function planTimelineHtml(ds,hourPx){
   const items=planningItemsForDay(ds);
   const totalH=(PLAN_END_H-PLAN_START_H)*hourPx;
-  let h='<div style="position:relative;height:'+totalH+'px;margin-top:4px">';
+  let h='<div data-tl-tap="'+ds+'" style="position:relative;height:'+totalH+'px;margin-top:4px">';
   for(let hr=PLAN_START_H;hr<=PLAN_END_H;hr++){
     const y=(hr-PLAN_START_H)*hourPx;
     const lbl=hr===12?'12p':hr<12?hr+'a':(hr-12)+'p';
@@ -5710,6 +5710,7 @@ function planningCalendarHtml(apts, calY, calM){
   const daysInMonth=new Date(calY,calM,0).getDate();
   const prefix=calY+'-'+String(calM).padStart(2,'0');
   const aptDates=new Set(apts.map(a=>a.datetime?a.datetime.slice(0,10):null).filter(Boolean));
+  const doneDates=new Set(apts.filter(a=>a.done&&a.datetime).map(a=>a.datetime.slice(0,10)));
   let h='';
   h+='<div class="cal-dow-row"><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span></div>';
   const firstDow=(new Date(calY,calM-1,1).getDay()+6)%7;
@@ -5728,7 +5729,7 @@ function planningCalendarHtml(apts, calY, calM){
         const border=isToday?'1px solid var(--planning)':'1px solid var(--card-border)';
         h+='<div class="cal-card2" data-plan-date="'+ds+'" style="background:'+bg+';border:'+border+';position:relative">'
           +'<span style="font-family:var(--mono);font-size:7px;color:'+(isToday?'var(--planning)':'var(--mute)')+'">'+dn+'</span>'
-          +(hasApt?'<svg viewBox="0 0 10 10" width="8" height="8" style="position:absolute;bottom:3px"><circle cx="5" cy="5" r="3.5" fill="var(--planning)"/></svg>':'')
+          +(hasApt?'<svg viewBox="0 0 10 10" width="8" height="8" style="position:absolute;bottom:3px"><circle cx="5" cy="5" r="3.5" fill="'+(doneDates.has(ds)?'var(--green)':'var(--planning)')+'"/></svg>':'')
           +'</div>';
       }
       dn++;
@@ -5739,7 +5740,7 @@ function planningCalendarHtml(apts, calY, calM){
   return h;
 }
 
-function openPlanDaySheet(ds){
+function openPlanDaySheet(ds, preTime){
   const apts=DB.appointments();
   const dayApts=apts.filter(a=>a.datetime&&a.datetime.slice(0,10)===ds);
   const d=new Date(ds+'T00:00:00');
@@ -5754,6 +5755,7 @@ function openPlanDaySheet(ds){
         +'</div>'
         +'<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">'
         +'<span style="font-family:var(--mono);font-size:10px;color:var(--planning)">'+fmtAptDt(a.datetime)+'</span>'
+        +'<button data-apt-done="'+escHtml(a.id)+'" style="background:transparent;border:none;color:'+(a.done?'var(--planning)':'var(--mute)')+';font-family:var(--mono);font-size:9px;cursor:pointer;padding:0">'+(a.done?'✓ done':'○ done')+'</button>'
         +'<button data-del-apt="'+escHtml(a.id)+'" style="background:transparent;border:none;color:var(--red);font-family:var(--mono);font-size:9px;cursor:pointer;padding:0">delete</button>'
         +'</div></div>';
     });
@@ -5761,29 +5763,48 @@ function openPlanDaySheet(ds){
   } else {
     inner+='<div style="font-size:11px;color:var(--mute);margin-bottom:14px">No appointments on this day.</div>';
   }
+  const doneTodosDs=DB.todos().filter(t=>t.forDate===ds&&t.done&&!t.dismissed);
+  if(doneTodosDs.length){
+    inner+='<div style="margin-bottom:12px">';
+    inner+='<div style="font-family:var(--mono);font-size:9px;color:var(--mute);letter-spacing:1px;margin-bottom:6px">FINISHED TASKS</div>';
+    doneTodosDs.forEach(t=>{
+      inner+='<div style="display:flex;align-items:center;gap:8px;padding:4px 0">'
+        +'<button data-undo-todo="'+escHtml(t.id)+'" style="background:var(--planning);border:none;border-radius:50%;width:18px;height:18px;flex-shrink:0;cursor:pointer;padding:0;display:flex;align-items:center;justify-content:center;color:var(--bg);font-size:10px;line-height:1">✓</button>'
+        +'<span style="font-size:12px;text-decoration:line-through;color:var(--mute)">'+escHtml(t.text)+'</span>'
+        +'</div>';
+    });
+    inner+='</div>';
+  }
   inner+='<button class="btn-ghost" id="open-add-apt" style="border-color:var(--planning);color:var(--planning);width:100%;margin-bottom:8px">+ Add appointment</button>';
   inner+='<div id="add-apt-form" style="display:none">';
   inner+='<label style="font-family:var(--mono);font-size:9px;color:var(--mute)">TITLE</label>';
   inner+='<input class="input" id="apt-title" placeholder="Appointment title" style="margin-top:4px">';
   inner+='<label style="font-family:var(--mono);font-size:9px;color:var(--mute);margin-top:4px;display:block">DATE & TIME</label>';
-  inner+='<input class="input" type="datetime-local" id="apt-datetime" style="margin-top:4px" value="'+ds+'T09:00">';
+  inner+='<input class="input" type="datetime-local" id="apt-datetime" style="margin-top:4px" value="'+ds+'T'+(preTime||'09:00')+'">';
   inner+='<label style="font-family:var(--mono);font-size:9px;color:var(--mute);margin-top:4px;display:block">NOTES (OPTIONAL)</label>';
   inner+='<textarea class="input textarea" id="apt-notes" placeholder="Notes" style="margin-top:4px;min-height:48px"></textarea>';
-  inner+='<label style="font-family:var(--mono);font-size:9px;color:var(--mute);margin-top:4px;display:block">CATEGORY</label>';
-  inner+=categoryPickerHtml(null,'apt');
   inner+='<div class="modal-actions"><button class="btn-cancel" id="apt-form-cancel">Cancel</button><button class="btn-primary" id="apt-save">Save</button></div>';
   inner+='</div>';
-  _planCatPick=null;
   openModal(inner);
-  document.querySelectorAll('[data-catid="apt"]').forEach(btn=>{
+  if(preTime){
+    const _ob=document.getElementById('open-add-apt');
+    const _fd=document.getElementById('add-apt-form');
+    if(_ob&&_fd){_ob.style.display='none';_fd.style.display='block';}
+  }
+  document.querySelectorAll('[data-undo-todo]').forEach(btn=>{
     btn.addEventListener('click',()=>{
-      _planCatPick=btn.dataset.catval||null;
-      document.querySelectorAll('[data-catid="apt"]').forEach(b=>{
-        const cv=b.dataset.catval;
-        const cats={faith:'var(--faith)',health:'var(--health)',music:'var(--music)',finance:'var(--finance)',growth:'var(--growth)','':'var(--mute)'};
-        b.style.borderColor=b===btn?(cats[cv]||'var(--border)'):'var(--border)';
-        b.style.color=b===btn?'var(--text)':'var(--mute)';
-      });
+      const list=DB.todos();
+      const t=list.find(x=>x.id===btn.dataset.undoTodo);
+      if(t){t.done=false;DB.saveTodos(list);}
+      closeModal(); openPlanDaySheet(ds);
+    });
+  });
+  document.querySelectorAll('[data-apt-done]').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      const list=DB.appointments();
+      const apt=list.find(a=>a.id===btn.dataset.aptDone);
+      if(apt){apt.done=!apt.done;DB.saveAppointments(list);}
+      closeModal(); openPlanDaySheet(ds); renderPlanning();
     });
   });
   document.querySelectorAll('[data-del-apt]').forEach(btn=>{
@@ -5805,8 +5826,7 @@ function openPlanDaySheet(ds){
     const title=titleEl?titleEl.value.trim():'';
     if(!title){if(titleEl)titleEl.focus();return;}
     const list=DB.appointments();
-    list.push({id:'apt'+Date.now(),title,datetime:dtEl?dtEl.value:ds+'T09:00',notes:notesEl?notesEl.value.trim():'',category:_planCatPick||null,reminded:false});
-    _planCatPick=null;
+    list.push({id:'apt'+Date.now(),title,datetime:dtEl?dtEl.value:ds+'T09:00',notes:notesEl?notesEl.value.trim():'',category:null,reminded:false,done:false});
     DB.saveAppointments(list);
     closeModal(); renderPlanning();
   });
@@ -5836,9 +5856,9 @@ function renderPlanning(){
   }
   const segStyle='padding:6px 0;flex:1;border:none;border-radius:0;font-family:var(--mono);font-size:9px;letter-spacing:1px;cursor:pointer;transition:background .15s';
   html+='<div style="display:flex;background:var(--track-bg);border-radius:10px;overflow:hidden;margin-bottom:10px">'
+    +'<button id="plan-view-cal" style="'+segStyle+';background:'+(planView==='calendar'?'var(--card-bg)':'transparent')+';color:'+(planView==='calendar'?'var(--planning)':'var(--mute)')+'">CALENDAR</button>'
     +'<button id="plan-view-today" style="'+segStyle+';background:'+(planView==='today'?'var(--card-bg)':'transparent')+';color:'+(planView==='today'?'var(--planning)':'var(--mute)')+'">TODAY</button>'
     +'<button id="plan-view-week" style="'+segStyle+';background:'+(planView==='week'?'var(--card-bg)':'transparent')+';color:'+(planView==='week'?'var(--planning)':'var(--mute)')+'">WEEK</button>'
-    +'<button id="plan-view-cal" style="'+segStyle+';background:'+(planView==='calendar'?'var(--card-bg)':'transparent')+';color:'+(planView==='calendar'?'var(--planning)':'var(--mute)')+'">CALENDAR</button>'
     +'</div>';
   if(planView==='today'){
     const unfinished=todos.filter(t=>t.forDate===TODAY&&t.carriedFrom&&!t.timeBlock&&!t.done&&!t.dismissed);
@@ -5846,7 +5866,7 @@ function renderPlanning(){
       html+=sectionLabel('UNFINISHED','var(--planning)');
       html+='<div class="card">';
       unfinished.forEach(t=>{
-        const cv=t.category?'var(--'+t.category+')':'var(--planning)';
+        const cv='var(--planning)';
         html+='<div class="stat-row" style="align-items:center">'
           +'<div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0">'
           +'<button data-todo-done="'+escHtml(t.id)+'" style="background:transparent;border:1.5px solid '+cv+';border-radius:50%;width:18px;height:18px;flex-shrink:0;cursor:pointer;padding:0"></button>'
@@ -5865,7 +5885,7 @@ function renderPlanning(){
     const todayTasks=todos.filter(t=>t.forDate===TODAY&&!t.carriedFrom&&!t.timeBlock&&!t.done&&!t.dismissed);
     if(todayTasks.length){
       todayTasks.forEach(t=>{
-        const cv=t.category?'var(--'+t.category+')':'var(--planning)';
+        const cv='var(--planning)';
         html+='<div class="stat-row" style="align-items:center">'
           +'<div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0">'
           +'<button data-todo-done="'+escHtml(t.id)+'" style="background:transparent;border:1.5px solid '+cv+';border-radius:50%;width:18px;height:18px;flex-shrink:0;cursor:pointer;padding:0"></button>'
@@ -5885,9 +5905,22 @@ function renderPlanning(){
       +'<input class="input" id="new-todo-text" placeholder="Add a task…" style="margin-bottom:0;flex:1">'
       +'<button class="btn-ghost" id="new-todo-save" style="width:auto;padding:0 12px;border-color:var(--planning);color:var(--planning)">+</button>'
       +'</div>'
-      +categoryPickerHtml(null,'todo')
       +'</div>';
     html+='</div>';
+    const finishedTodos=todos.filter(t=>t.forDate===TODAY&&t.done&&!t.dismissed);
+    if(finishedTodos.length){
+      html+=sectionLabel('FINISHED','var(--mute)');
+      html+='<div class="card">';
+      finishedTodos.forEach(t=>{
+        html+='<div class="stat-row" style="align-items:center">'
+          +'<div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0">'
+          +'<button data-todo-undo="'+escHtml(t.id)+'" style="background:var(--planning);border:none;border-radius:50%;width:18px;height:18px;flex-shrink:0;cursor:pointer;padding:0;display:flex;align-items:center;justify-content:center;color:var(--bg);font-size:10px;line-height:1">✓</button>'
+          +'<span style="font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-decoration:line-through;color:var(--mute)">'+escHtml(t.text)+'</span>'
+          +'</div>'
+          +'</div>';
+      });
+      html+='</div>';
+    }
     html+=sectionLabel('TODAY TIMELINE','var(--planning)');
     html+='<div class="card" style="padding:10px 6px 10px 0;overflow:hidden">';
     html+=planTimelineHtml(TODAY,PLAN_HOUR_PX);
@@ -5999,15 +6032,12 @@ function renderPlanning(){
     s.querySelectorAll('[data-tb-edit]').forEach(btn=>{
       btn.addEventListener('click',()=>openTimeBlockModal(btn.dataset.tbEdit));
     });
-    s.querySelectorAll('[data-catid="todo"]').forEach(btn=>{
+    s.querySelectorAll('[data-todo-undo]').forEach(btn=>{
       btn.addEventListener('click',()=>{
-        _planCatPick=btn.dataset.catval||null;
-        s.querySelectorAll('[data-catid="todo"]').forEach(b=>{
-          const cv=b.dataset.catval;
-          const cats={faith:'var(--faith)',health:'var(--health)',music:'var(--music)',finance:'var(--finance)',growth:'var(--growth)','':'var(--mute)'};
-          b.style.borderColor=b===btn?(cats[cv]||'var(--border)'):'var(--border)';
-          b.style.color=b===btn?'var(--text)':'var(--mute)';
-        });
+        const list=DB.todos();
+        const t=list.find(x=>x.id===btn.dataset.todoUndo);
+        if(t){t.done=false;DB.saveTodos(list);}
+        renderPlanning();
       });
     });
     const saveBtn=document.getElementById('new-todo-save');
@@ -6017,13 +6047,23 @@ function renderPlanning(){
       const text=inp.value.trim();
       if(!text) return;
       const list=DB.todos();
-      list.push({id:'todo'+Date.now(),text,forDate:TODAY,done:false,dismissed:false,category:_planCatPick||null,timeBlock:null,carriedFrom:null});
-      _planCatPick=null;
+      list.push({id:'todo'+Date.now(),text,forDate:TODAY,done:false,dismissed:false,category:null,timeBlock:null,carriedFrom:null});
       DB.saveTodos(list);
       renderPlanning();
     });
     const inp=document.getElementById('new-todo-text');
     if(inp) inp.addEventListener('keydown',(e)=>{if(e.key==='Enter') document.getElementById('new-todo-save').click();});
+    s.querySelectorAll('[data-tl-tap]').forEach(tl=>{
+      tl.addEventListener('click',(e)=>{
+        if(e.target.closest('[data-tl-apt],[data-tl-todo],[data-tl-dismiss],[data-tb-edit]')) return;
+        const rect=tl.getBoundingClientRect();
+        const rawMins=PLAN_START_H*60+(e.clientY-rect.top)/PLAN_HOUR_PX*60;
+        const rounded=Math.round(rawMins/30)*30;
+        const hh=String(Math.min(Math.floor(rounded/60),23)).padStart(2,'0');
+        const mm=String(rounded%60).padStart(2,'0');
+        openPlanDaySheet(tl.dataset.tlTap,hh+':'+mm);
+      });
+    });
   } else if(planView==='week'){
     const wkBack=document.getElementById('plan-wk-back');
     const wkFwd=document.getElementById('plan-wk-fwd');
@@ -6031,6 +6071,17 @@ function renderPlanning(){
     if(wkBack) wkBack.addEventListener('click',()=>{planWeekOffset++;renderPlanning();});
     if(wkFwd) wkFwd.addEventListener('click',()=>{if(planWeekOffset>0){planWeekOffset--;renderPlanning();}});
     if(wkToday) wkToday.addEventListener('click',()=>{planWeekOffset=0;renderPlanning();});
+    s.querySelectorAll('[data-plan-ds]').forEach(col=>{
+      col.addEventListener('click',(e)=>{
+        if(e.target.closest('[data-tl-apt],[data-tl-todo],[data-tl-dismiss],[data-tb-edit]')) return;
+        const rect=col.getBoundingClientRect();
+        const rawMins=PLAN_START_H*60+(e.clientY-rect.top)/PLAN_WEEK_PX*60;
+        const rounded=Math.round(rawMins/30)*30;
+        const hh=String(Math.min(Math.floor(rounded/60),23)).padStart(2,'0');
+        const mm=String(rounded%60).padStart(2,'0');
+        openPlanDaySheet(col.dataset.planDs,hh+':'+mm);
+      });
+    });
   } else {
     const planBack=document.getElementById('plan-cal-back');
     const planFwd=document.getElementById('plan-cal-fwd');
