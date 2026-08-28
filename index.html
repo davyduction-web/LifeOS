@@ -298,6 +298,7 @@ let musicReportPeriod = 'month';
 let calMonthOffset = 0;
 let convPeriod = 'weekly';
 let sbPeriod = 'daily';
+let cbPeriod = 'daily';
 let _txCountMap = null;
 let swalatInterval = null;
 let timeElapsedInterval = null;
@@ -1760,16 +1761,25 @@ function renderHome(){
     '<div style="font-family:var(--mono);font-size:9px;color:var(--mute);margin-top:8px">Faith '+scores.faith+' / Health '+scores.health+' / Music '+scores.music+'</div>'+
     '<div style="font-family:var(--mono);font-size:9px;color:var(--mute);margin-top:2px">Finance '+scores.finance+' / Growth '+scores.growth+'</div></div></div></div></div>';
 
-  const fBStreak=computeStreak(r=>r.faith&&r.faith.fajr==='caught',TODAY);
-  const sBStreak=computeStreak(r=>r.health&&r.health.smokeFree===true,TODAY);
-  if(fBStreak>0||sBStreak>0){
-    const useFajr=fBStreak>=sBStreak&&fBStreak>0;
-    html+=waveBannerHtml(
-      useFajr?'Day '+fBStreak+' — keep the streak alive.':'Day '+sBStreak+' smoke-free.',
-      useFajr?'FAJR STREAK · PROTECT IT':'SMOKE-FREE STREAK · HOLD THE LINE',
-      useFajr?'var(--faith)':'var(--health)',
-      useFajr?'var(--cyan)':'var(--amber)'
-    );
+  const _sChips=[
+    {label:'TAHAJJUD', color:'var(--faith)',  val:computeStreak(r=>r.faith&&r.faith.tahajjud===true, TODAY, convAll)},
+    {label:'GRATITUDE',color:'var(--faith)',  val:computeStreak(r=>r.faith&&r.faith.gratitude===true, TODAY, convAll)},
+    {label:'6H SLEEP', color:'var(--health)', val:computeStreak(r=>r.health&&r.health.sleepHours>=6, TODAY, convAll)},
+    {label:'SPORT',    color:'var(--health)', val:computeStreak(r=>{const h=r.health;if(!h)return false;const old=(h.pushupsReps||0)>0||(h.abrollerReps||0)>0||(h.kegelReps||0)>0||(h.matroutineReps||0)>0||(h.plankSeconds||0)>0;const sp=h.sport||{};const ss=o=>Object.values(o||{}).reduce((a,b)=>a+b,0);return old||ss(sp.squats)>0||ss(sp.abs)>0||ss(sp.cardio)>0;}, TODAY, convAll)},
+    {label:'STUDIO',   color:'var(--music)',  val:computeStreak(r=>r.music&&r.music.sessions&&r.music.sessions.length>0, TODAY, convAll)},
+  ];
+  const _visChips=_sChips.filter(c=>c.val>0);
+  if(_visChips.length>0){
+    const _chipHtml=_visChips.map(c=>
+      '<div style="display:inline-flex;flex-direction:column;gap:2px;padding:8px 12px;background:rgba(255,255,255,0.05);border-radius:10px;border-left:3px solid '+c.color+'">'+
+      '<div style="display:flex;align-items:center;gap:5px">'+
+      '<span style="font-size:15px;line-height:1">🔥</span>'+
+      '<span style="font-family:var(--mono);font-size:15px;font-weight:700;color:var(--text);line-height:1">'+c.val+'</span>'+
+      '</div>'+
+      '<div style="font-family:var(--sans);font-size:7.5px;color:var(--mute);letter-spacing:0.04em;margin-top:2px">'+c.label+'</div>'+
+      '</div>'
+    ).join('');
+    html+='<div class="card" style="display:flex;flex-wrap:wrap;gap:8px;padding:12px 14px">'+_chipHtml+'</div>';
   }
 
   html += '<div id="home-day-ring"></div>';
@@ -1821,8 +1831,40 @@ function renderHome(){
   const dayLabels = trendDays.map(t=>'<span>'+t.date.toLocaleDateString('en-US',{weekday:'short'}).charAt(0)+'</span>').join('');
   html += '<div class="card">'+'<div style="font-family:var(--mono);font-size:9px;color:var(--mute);margin-bottom:6px">LAST 7 DAYS</div>'+trendSvg+'<div class="trend-labels">'+dayLabels+'</div></div>';
 
-  html += sectionLabel('CATEGORY BALANCE TODAY','var(--home)');
-  html += '<div class="card">'+isoCubeHtml(scores)+'</div>';
+  // Category Balance — period-averaged bar chart
+  let cbKeys;
+  if(cbPeriod==='daily'){
+    cbKeys=convAll[TODAY]?[TODAY]:[];
+  } else if(cbPeriod==='weekly'){
+    const cbWd=new Date(TODAY);const cbDsm=(cbWd.getDay()+6)%7;cbWd.setDate(cbWd.getDate()-cbDsm);
+    const cbWeekStart=cbWd.toISOString().slice(0,10);
+    cbKeys=Object.keys(convAll).filter(k=>k>=cbWeekStart&&k<=TODAY);
+  } else {
+    cbKeys=Object.keys(convAll).filter(k=>k.startsWith(monthPrefix));
+  }
+  let cbScores;
+  if(cbPeriod==='daily'){
+    cbScores=scores;
+  } else {
+    const _cbFns=[
+      {k:'faith',  fn:faithScore },
+      {k:'health', fn:healthScore},
+      {k:'music',  fn:musicScore },
+      {k:'finance',fn:financeScore},
+      {k:'growth', fn:growthScore}
+    ];
+    cbScores={};
+    _cbFns.forEach(({k,fn})=>{
+      cbScores[k]=cbKeys.length?Math.round(cbKeys.reduce((sum,ds)=>sum+fn(convAll[ds],ds),0)/cbKeys.length):0;
+    });
+  }
+  const cbPeriodSel='<div class="btn-group" style="margin-bottom:8px">'
+    +'<button class="opt-btn cb-period-btn'+(cbPeriod==='daily'?' sel':'')+'" data-cb-period="daily">Daily</button>'
+    +'<button class="opt-btn cb-period-btn'+(cbPeriod==='weekly'?' sel':'')+'" data-cb-period="weekly">Weekly</button>'
+    +'<button class="opt-btn cb-period-btn'+(cbPeriod==='monthly'?' sel':'')+'" data-cb-period="monthly">Monthly</button>'
+    +'</div>';
+  html += sectionLabel('CATEGORY BALANCE','var(--home)');
+  html += '<div class="card">'+cbPeriodSel+isoCubeHtml(cbScores)+'</div>';
 
   // Score Breakdown — period-averaged pie (reuses convAll already loaded above)
   let sbKeys;
@@ -2028,6 +2070,9 @@ function renderHome(){
   });
   s.querySelectorAll('.score-period-btn').forEach(b=>{
     b.addEventListener('click',()=>{ sbPeriod=b.dataset.scorePeriod; renderHome(); });
+  });
+  s.querySelectorAll('.cb-period-btn').forEach(b=>{
+    b.addEventListener('click',()=>{ cbPeriod=b.dataset.cbPeriod; renderHome(); });
   });
   const brDismissBtn = document.getElementById('dismiss-backup-reminder');
   if (brDismissBtn) brDismissBtn.addEventListener('click', () => {

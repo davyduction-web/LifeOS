@@ -1286,6 +1286,18 @@ One real judgment call surfaced and was explicitly confirmed rather than assumed
 
 ---
 
+## SESSION LOG — 2026-08-26 (Deploy sync overdue by ~8 days of work, home screen icon replacement)
+
+**Not a bug or infrastructure flaw — this is Davydenko's normal, existing workflow, just overdue.** The project has always lived in two folders by design: `C:\Users\HP\Desktop\CLAUDE BRAIN\Projects\LifeOS\` (outer, no git — where all edits are made) and `C:\Users\HP\Desktop\CLAUDE BRAIN\Projects\LifeOS\LifeOS\` (inner, the real git repo deployed to GitHub Pages). Davydenko's established process is: edit in the outer folder, then manually copy `index.html` into the inner folder himself, then push. This was mistaken for a discovered problem when it surfaced during the icon task — corrected: it's simply that this manual copy-and-push step hasn't happened since before 2026-08-18, so none of that session's worth of work (Growth rebuild, Health Sport, Faith fix, Onboarding, Home redesign, the full Ox Alpha audit, Growth scoring fix, Music rescale, the Planning tab) has reached the live app yet — not because the workflow is broken, just because the sync step is overdue.
+
+**Home screen app icon replacement — built and verified, scoped narrowly at the user's explicit direction.** User wanted the new silver-metal/teal-glow "Life OS" logo (already generated back on 2026-08-17 for the reverted splash-screen feature, sitting at `hf_20260817_173035_e1a6152b-2c64-43a7-a8a7-b98854682fe1.png`) to become the phone home-screen icon, replacing the current plain black "L". When asked whether this should also apply to the in-app header logo, user said yes initially, then explicitly narrowed it back down: "leave everything as it was, only make it Home screen replacing the L" — so the in-app header logo (`image_holographic_logo-825a1b.png`, shown at 44px next to "Davydenko / Life OS" in two places) was deliberately left untouched, and only `icon-192.png`/`icon-512.png` were replaced.
+
+User specified this should be written ONLY to the inner `LifeOS\LifeOS\` folder (the real deploy repo) — the outer folder's copies were explicitly left alone, meaning the inner folder's icons are currently AHEAD of the outer folder's (a detail to account for when the overdue index.html sync eventually happens — don't let a sync overwrite the new icons with the outer folder's old ones). Composition: the wordmark ("Life OS" text) was cropped out entirely, since a home-screen icon shouldn't carry baked-in text; just the interlocking-loop mark was centered on a 2880×2880 canvas matching the source's own dark background color, with the metal loops kept to a ~14% margin (well within the maskable-icon 10% safe zone) and the ambient glow allowed to extend closer to the edge since it fades to near-black there anyway. Resized to 512×512 and 192×192 with LANCZOS filtering. `CACHE_NAME` in `sw.js` was proactively bumped so any already-installed copy of the PWA picks up the new icon on its next visit, rather than silently keeping the old cached one indefinitely.
+
+**Status: icon replacement is done and correctly deployed to the actual repo folder. The index.html sync + push (Davydenko's own normal manual step) is still outstanding, now covering ~8 days of work.**
+
+---
+
 ## LIVE URL
 
 **https://davyduction-web.github.io/LifeOS** — confirmed working by
