@@ -1522,3 +1522,624 @@ Two real mistakes caught and fixed before this stage was signed off (both by Cla
 
 All of the above — the Music rescale and all 6 build rounds of Planning — is built and Playwright-verified, but **NOT yet pushed to GitHub Pages, and NOT yet confirmed on Davydenko's actual phone.** This folds into the same outstanding "push everything + verify on-device" step noted at the end of the 2026-08-21/25 Ox Alpha audit entry above — that single remaining step now covers the full audit-fix arc, the Growth scoring redesign, the Music rescale, and this entire Planning tab build.
 
+---
+
+## SESSION LOG — 2026-08-30 (Porting 4 visual/feature upgrades from PublicOS back into LifeOS)
+
+After finishing PublicOS's entire build (content + visual pass + scoring
+redesign — full detail in `Projects\PublicOS\ACTIVE.md`), Davydenko
+reviewed what PublicOS gained visually that LifeOS doesn't have, and
+confirmed 4 things worth porting back into his own personal app.
+
+**Investigation done first, confirming what actually exists in LifeOS
+today** (not assumed from PublicOS's state, since the two forks have
+diverged):
+- Timers: LifeOS already uses `openTimePickerModal()` (derived-duration,
+  not live-stopwatch) for Music sessions and Reading sessions — but it's
+  the original large Sleep-style wheel modal, not PublicOS's newer
+  compact clock-face redesign. Health's **Plank timer** is still the old
+  live `{running,start,elapsed,iv,date}` stopwatch pattern.
+- Finance: only 9 categories currently (Rent, Food, Business costs,
+  Transport, Weed, Cigarettes, Given to people, Home bills, Other),
+  duplicated across **6 separate places** in the code (lines ~1592,
+  3166, 3206, 3829 as `FIN_CATS`, 3983, 5105 as `expCats2`) — not
+  consolidated into one shared function the way PublicOS's `finCats()`
+  is.
+- Category Balance: only the 3D-bar display (`isoCubeHtml`) exists, no
+  radar chart — clean slate, nothing to conflict with.
+- Work Consistency: LifeOS's Music tab already has `musicScoreComponents()`
+  — the exact function PublicOS's Work Consistency Wheel is built on —
+  but has NO Check-in/Check-out timer at all, which is what powers the
+  wheel's outer-ring annotation in PublicOS.
+
+**4 pieces confirmed for porting, each with real scope decisions made,
+not assumed:**
+
+1. **Home Category Balance Radar Chart** — direct port. A Bars/Radar
+   toggle alongside the existing 3D-bar display, reading the exact same
+   underlying category scores. No new data, no dependencies.
+
+2. **Finance Spending Breakdown Donut Chart + expanded category list.**
+   Category list confirmed: Davydenko's existing 9 (which already
+   include Weed and Cigarettes — personal to him, never part of
+   PublicOS's generic build) PLUS all 10 of PublicOS's Male-build
+   additions (Entertainment/Going out, Alcohol/Bar, Gym/Sports
+   membership, Electronics/Gadgets, Clothing, Car/Motorcycle
+   maintenance, Subscriptions, Grooming/Barber, Savings/Investment,
+   Family support) = **19 total categories**, confirmed as a full merge
+   (nothing dropped from either list). Given the category array is
+   currently duplicated 6 times in the code, this port should also
+   consolidate it into one shared function first (matching PublicOS's
+   `finCats()` pattern), same architectural improvement made during
+   PublicOS's own Stage 5.
+
+3. **Work Consistency Wheel.** Confirmed: build the full wheel including
+   the outer check-in-hours ring — which means Music ALSO needs a new
+   Check-in/Check-out timer added first (confirmed explicitly, not
+   skipped/simplified). This is a genuinely new feature for LifeOS's
+   Music tab, not just a visual port.
+
+4. **Timer visual upgrade, broader scope than initially proposed.**
+   Confirmed: BOTH (a) convert Health's Plank timer from the old live-
+   stopwatch pattern to the newer derived-duration picker (matching
+   PublicOS's Faith-style compact clock-face visual), AND (b) restyle
+   Music's and Reading's already-working `openTimePickerModal` pickers
+   to match the same newer compact look, even though they already
+   function correctly — a pure visual upgrade, not a bug fix.
+
+**Not yet built.** Given the real dependency (the Work Consistency
+Wheel's outer ring needs Check-in to exist first) and the sheer size of
+porting 4 separate features, this should be staged the same way
+PublicOS's own build was — one piece at a time, fresh Claude Code
+sessions per stage, read-before-propose, confirm before build, full
+Playwright verification before closing each one out. Suggested order:
+Radar Chart (simplest, no dependencies) → Finance (category consolidation
++ donut) → Check-in/Check-out timer on Music (new feature, needed next)
+→ Work Consistency Wheel (depends on Check-in existing) → Timer visual
+upgrades (Plank + Music/Reading restyle, can happen independently of the
+other three at any point).
+
+### Item 1 (Radar Chart) — BUILT AND VERIFIED
+
+Ported from PublicOS's proven `radarChartHtml()`/`cbView` implementation,
+with one real adaptation caught before building rather than a blind
+copy-paste: LifeOS's Category Balance has **6 categories, not 5**
+(Faith/Health/Music/Finance/Growth/Planning — PublicOS never had a
+Planning category in this data). The radar was correctly built as a
+hexagon (6 spokes at 60° spacing) instead of PublicOS's pentagon (5
+spokes at 72°), same underlying grid-ring/polygon/label structure
+otherwise unchanged.
+
+Live Playwright verification: default view on page load confirmed as
+Bars, toggle confirmed switching both directions, all 6 spokes confirmed
+rendering correctly labeled with real score numbers, polygon proportions
+confirmed pixel-accurate against real test data, and switching back to
+Bars confirmed showing identical numbers — no drift between the two
+views, both read the same underlying category-scores data.
+
+**Status: item 1 of 4 (Radar Chart) is fully built, verified, and
+closed.** Remaining: Finance (category consolidation + donut chart),
+Check-in/Check-out timer on Music, Work Consistency Wheel, and the timer
+visual upgrades (Plank + Music/Reading restyle) — none started yet.
+
+### Item 2 (Finance category consolidation + donut chart) — BUILT AND VERIFIED
+
+**A real gap in the original investigation was caught before building**:
+a 9th duplicate of the Finance category array turned up in the Reports
+section, missed by the initial grep search that only found 6. Fixed as
+part of the consolidation — all 9 actual call sites (not the originally-
+assumed 6) now point at one shared category function.
+
+**19 categories confirmed**: the existing 9 (Rent, Food, Business costs,
+Transport, Weed, Cigarettes, Given to people, Home bills, Other) plus
+all 10 of PublicOS's Male-build additions. Ordering kept deliberately
+personal rather than alphabetized — Weed/Cigarettes stay near the top
+since they're Davydenko's own frequently-used categories, not pushed
+down just because they were in the original shorter list.
+
+**One real, confirmed deviation from the PublicOS reference**: the
+donut chart's direct-label threshold is 12%, not PublicOS's 8% —
+reasoned from LifeOS's 19 categories vs PublicOS's 17-22 (a similar
+range, so a slightly higher bar keeps the chart equally legible),
+confirmed explicitly as an intentional choice rather than assumed to
+match the source exactly.
+
+**Live Playwright verification**: all 19 categories confirmed appearing
+consistently across every real call site (transaction modal, Spending
+Breakdown, and the Reports section instance that the original grep
+missed). Donut chart tested with real multi-transaction data — the 12%
+threshold's boundary behavior specifically confirmed: a 16.4% slice
+correctly got a direct label, a 10.5% slice correctly did NOT (just under
+the 12% cutoff) — the threshold logic actually discriminates correctly,
+not just "a chart renders." Dropdown tested for both adding and editing
+a transaction. Empty-state message confirmed showing correctly with zero
+transactions logged.
+
+**Status: item 2 of 4 (Finance) is fully built, verified, and closed.**
+Remaining: Check-in/Check-out timer on Music, Work Consistency Wheel
+(depends on Check-in), and the timer visual upgrades (Plank +
+Music/Reading restyle) — none started yet.
+
+### CRITICAL: folder-target mistake caught and fixed before item 4
+
+Unlike PublicOS (where the inner `LifeOS(Public)\` folder is the real
+deploy target), **LifeOS's actual convention is the OPPOSITE**: the
+OUTER folder (`C:\Users\HP\Desktop\CLAUDE BRAIN\Projects\LifeOS\index.html`)
+is the live, served, tested-against file (port 8081) — the inner
+`LifeOS\LifeOS\index.html` is a manually-synced copy for pushing later,
+not the primary working file. This is the SAME two-folder pattern as
+PublicOS in shape, but with the roles reversed.
+
+The first three prompts in this porting session (Items 1, 2, and the
+first attempt at Item 3) mistakenly specified the inner folder as the
+build target, carrying over PublicOS's convention without confirming
+LifeOS's actual one first. Result: Items 1 (Radar Chart) and 2 (Finance)
+were built and verified ONLY against the inner file — the outer file
+(the one actually served and tested on-device) never received either
+feature. This was caught by Claude Desktop explicitly requesting a
+file-diff comparison after Item 3 completed, rather than assuming
+previous "verified" claims meant the live app had them.
+
+**Fixed**: since the inner file was confirmed as a strict superset (all
+3 features + no unrelated changes), it was copied wholesale to fully
+replace the outer file — confirmed byte-for-byte identical afterward
+(6,747 lines / 398,979 bytes, both files). Re-verified all 3 features
+directly against the outer file at port 8081 (not just a file-size
+match): Radar Chart toggle confirmed working, all 19 Finance categories
+confirmed present via `finCats()`, donut chart confirmed rendering, and
+the Check-in timer confirmed reading back a real saved value
+(`checkinSeconds = 7200`) from today's actual record.
+
+**Going forward, all remaining prompts in this porting effort target the
+OUTER folder directly** (`C:\Users\HP\Desktop\CLAUDE BRAIN\Projects\LifeOS\index.html`)
+— confirmed as the correct convention for LifeOS specifically, not
+assumed from PublicOS's pattern.
+
+### Item 3 (Check-in/Check-out timer on Music) — BUILT AND VERIFIED
+
+**Deliberately built on the OLDER `openTimePickerModal` (wheel picker),
+not PublicOS's newer ruler-drag style** — a forward-thinking sequencing
+choice, not a shortcut: since item #4 (still upcoming) will restyle
+EVERY use of `openTimePickerModal` across the app, building Check-in on
+that same shared base means this feature gets visually upgraded
+automatically when item #4 happens, rather than needing two separate
+touches.
+
+**A real formatting bug was caught proactively before it happened**:
+the existing `formatSeconds` helper (M:SS format) would have displayed
+a 3.5-hour check-in as "210:00" — wrong for an hours-scale duration.
+Built with a proper "Xh Ym" formatter instead, matching how duration is
+actually meant to read at this scale.
+
+**Data model**: new transient global `musicCheckinDraft` (start/end/date,
+not persisted) plus one new persisted field `day.music.checkinSeconds`.
+Deliberately does NOT touch `musicScoreComponents()` — scoring wiring is
+explicitly deferred to item #4's sibling, the Work Consistency Wheel,
+keeping this item correctly scoped rather than creeping into the next
+one's job.
+
+**A date-change reset guard was added proactively**, preventing the
+transient start/end draft state from leaking across different days when
+navigating via EDIT_DATE — the same class of bug PublicOS's own Stage
+3.5 caught and fixed for job-switching, applied here before it could
+ever surface as a real bug.
+
+**Live Playwright verification, all 9 checks passed**: all 3 UI states
+(nothing set / start set / both set) confirmed rendering correctly;
+`checkinSeconds` confirmed exact (7200) in memory; confirmed saved
+correctly to localStorage under the right date; confirmed persisting
+correctly after a reload (duration shown without the transient chip, as
+designed); the date-change guard confirmed clearing today's draft when
+switching to a past day; a past-day edit (3h) confirmed saved correctly
+WITHOUT touching today's separately-stored value (2h) — full
+cross-date independence confirmed, not just assumed.
+
+**Status: item 3 of 4 (Check-in/Check-out timer) is fully built,
+verified, and NOW CONFIRMED on the correct (outer) file.** Remaining:
+the Work Consistency Wheel (can now proceed, since Check-in exists) and
+the timer visual upgrades (Plank + Music/Reading restyle) — neither
+started yet.
+
+### Item 4a (Work Consistency Wheel) — BUILT AND VERIFIED
+
+**Real, correctly-identified adaptation, not a straight copy**: PublicOS's
+reference wheel segments were built for its job-based scoring system
+(repPts/otPts/ciPts against a per-job WORK_TARGET) — a system that
+doesn't exist in LifeOS at all, since LifeOS never went through
+PublicOS's Work/job redesign. Correctly adapted to visualize LifeOS's
+actual existing scoring instead: the 3 stacked segments are
+`musicScoreComponents()`'s real projectPts (green, max 40) / minutePts
+(music accent, max 40) / qualityPts (amber, max 20), scaled against the
+true 100-point total rather than a job target that doesn't apply here.
+
+**Everything else confirmed unchanged from the proven reference**: SVG
+geometry (hub/max radius, bar width, label radii), the Monday-aligned
+week computation (confirmed identical to LifeOS's own Review tab
+convention via `getWeekDays`, not assumed), the check-in-hours outer
+annotation logic, today-spoke highlighting, and the empty-spoke faint-
+track treatment.
+
+**Placement**: between the existing "STUDIO MINUTES — LAST 7 DAYS" wave
+chart and "THIS MONTH VS LAST MONTH" — chosen deliberately for a clean
+weekly-to-monthly information flow matching the rest of the Music tab's
+rhythm, since LifeOS has no equivalent to whatever card sat in that
+exact PublicOS slot.
+
+**Live Playwright verification, pixel-exact across every active day—not
+just spot-checked**: all 3 segment heights checked against
+pre-computed `musicScoreComponents()` values for all 4 days with real
+sessions (Mon/Tue/Wed/Thu), every single value matched exactly (e.g.
+Mon: 16.00/21.33/12.80, Thu: 24.00/32.00/16.00). The 3 days with zero
+sessions (Fri/Sat/Sun) confirmed rendering as visible faint-track empty
+spokes, not hidden or broken. Today's spoke (Wed) confirmed highlighted
+with the correct color/weight, all other days confirmed at normal
+weight. Check-in annotations confirmed correct across all 7 days
+including the — fallback for days with no check-in logged. Week label
+confirmed showing the correct Monday-aligned range.
+
+**Status: item 4a of 4 (Work Consistency Wheel) is fully built,
+verified, and closed — correctly built and verified on the outer file
+from the start this time.** Remaining: the timer visual upgrades (Plank
+timer conversion + Music/Reading picker restyle) — the last piece of
+this 4-item porting effort.
+
+### Item 4b (Plank conversion + universal picker restyle) — BUILT AND VERIFIED
+
+**Part A — Plank timer converted from live stopwatch to derived-duration
+picker**, same state-shape pattern already used for item 3's Music
+Check-in (`plankPicker` mirroring `musicCheckinDraft`). Confirmed live:
+full picker flow (Set Start → Set End → duration derived), accumulation
+across two sessions in one day (35min + 30min = exactly 65:00, not just
+approximately), the chip re-opening the picker for a third session, Redo
+correctly clearing everything, and — per the explicit decision to match
+Stage 3.5's precedent rather than leave Plank as an inconsistent holdout
+— past-day editing confirmed working with no restriction (the
+"EDITING — [date]" banner shows correctly and the picker opens normally
+on a past day).
+
+**Part B — `openTimePickerModal` restyled to a single unified clock-face
+style** (correctly generalizing PublicOS's two-context split into one,
+since LifeOS has no Faith-vs-Work distinction to justify two styles).
+Function signature kept identical, so all 8 call sites needed zero
+changes — confirmed individually, not just counted: Health Bedtime
+(caught a real correctness detail: 10:30 PM correctly saves as 22:30,
+confirming the 12-to-24-hour conversion works, not just that the modal
+opens), Health Wake time, Music Check-in start, Music session start/end,
+Reading session start/end — all 8 verified working.
+
+**A genuine bonus finding, unrelated to this session's actual task**:
+Playwright testing surfaced 3 pre-existing null-reference crashes that
+were blocking testing itself — `faithScoreComponents` and
+`healthScoreComponents` both missing a `d.faith||{}` / `d.health||{}`
+guard, and `compareDayHtml`'s faith section missing the same guard on
+both `day.faith` and `refRec.faith`. These were REAL bugs already living
+in LifeOS, not introduced by tonight's work — found only because this
+session's thorough testing happened to exercise the exact code paths
+that triggered them. This directly confirms a loose end flagged much
+earlier the same night, during PublicOS's own Work Consistency Wheel
+testing: a `d.faith`-related TypeError spotted in a different browser
+session's console history at the time, noted as "not yet confirmed
+whether it's a real LifeOS bug." It was real, and it's now fixed.
+
+**Regression check confirmed all 3 earlier items still work**: Radar
+Chart (toggles correctly, all 6 category labels render), Finance donut
+(tab renders, no errors), Music Check-in (reset/set flow still working),
+Work Consistency Wheel (spokes still render correctly with the right
+values) — nothing broke as a side effect of this final, widest-reaching
+change.
+
+**Status: item 4b is complete. All 4 items of this porting effort are
+now fully built, verified, and closed.**
+
+---
+
+## *** 4-ITEM PUBLICOS → LIFEOS PORTING EFFORT COMPLETE (2026-08-30/09-02) ***
+
+All four visual/feature upgrades Davydenko identified from comparing
+PublicOS against his own personal app are done: (1) Home Category
+Balance Radar Chart, (2) Finance category consolidation to 19 items +
+Spending Breakdown donut chart, (3) a new Music Check-in/Check-out
+timer, (4) the Work Consistency Wheel (adapted to LifeOS's real
+`musicScoreComponents()` scoring rather than PublicOS's job-based
+system, since LifeOS has no job/Work redesign), and the universal timer
+picker restyle (Plank converted, all 8 `openTimePickerModal` call sites
+unified to one clock-face style). Along the way, a real folder-target
+mistake was caught and fixed (LifeOS's outer folder, not inner, is the
+live/served file — opposite of PublicOS's convention), and 3 genuine
+pre-existing null-guard bugs were found and fixed as an incidental
+benefit of thorough testing.
+
+**Everything in this porting effort is built and Playwright-verified on
+the correct (outer) file.** Same as always: not yet confirmed on an
+actual phone, and worth pushing/checking on-device before considering
+this fully done in the same sense LifeOS's earlier work eventually was.
+
+---
+
+## TWO NEW ISSUES RAISED (2026-09-02), post-porting-effort
+
+**1. BUG: Fajr Streak appears missing from the Faith tab.** Confirmed
+by reading the actual current outer file: the code is fully intact —
+`const fajrStreak = computeStreak(r=>r.faith && r.faith.fajr==='caught',
+TODAY, all); html += flameStat('FAJR STREAK', fajrStreak, 'var(--faith)');`
+still exists inside `renderFaith()`, nothing was deleted from the code.
+Since the code is present but Davydenko reports it's not visually
+showing, the likely cause is a JS error occurring somewhere earlier in
+`renderFaith()`'s execution (possibly related to tonight's null-guard
+fixes touching shared Faith-related code) silently aborting the render
+before reaching this line — NOT a case of the feature being deleted.
+Needs live investigation (console errors, stepping through the actual
+render), not a code-only diagnosis, since the source clearly still has
+it.
+
+**2. NEW FEATURE: repeatable multi-entry logging for Health's
+Stamina Protocol rep items.** Same underlying pattern already built and
+proven for PublicOS's Work category (Bucket-A repeatable fields, the
+`repLogs` array-per-field data model, "log it, get offered another
+slot" UI). Confirmed scope: applies to **5 items** — Plank (just
+converted tonight to the derived-duration picker, currently
+single-accumulating via `h.plankSeconds +=`) AND the 4 rep-counter items
+(Push-ups, Ab roller, Kegel, Mat routine — currently simple running-
+total number fields). The real-world model: someone doing multiple SETS
+of an exercise in one day (e.g. 3 separate plank holds, or 3 sets of
+push-ups at different rep counts) should be able to log each set as its
+own entry, not have everything silently collapse into one combined
+number with no record of the individual sets.
+
+**Not yet designed or built.** Next step: send Claude Code to (a)
+investigate the Fajr Streak issue live and report the actual root cause
+before proposing a fix, and (b) propose the exact data model and UI for
+the 5-item repeatable-entry feature — noting Plank is duration-based
+(each entry = a timed set) while the other 4 are count-based (each entry
+= a rep count for that set), so the UI likely needs two slightly
+different entry-input shapes even though the underlying "log it, offer
+another slot" mechanic stays the same. Get confirmation before building,
+same discipline as everything else in this whole project.
+
+---
+
+## STREAK SYSTEM EXPANSION (2026-09-02) — 3 new streaks + richer card style
+
+**3 new streaks confirmed**, on top of the 9 that already exist (Fajr,
+Smoke-Free, Growth, Consecutive-Weeks-≥70, plus Home's compact chip row:
+Tahajjud, Gratitude, 6H Sleep, Sport, Studio):
+- **Water** — streak for hitting the daily water goal (≥5 glasses,
+  matching the existing `h.water` field and its existing 5-glass target)
+- **Finance** — streak for logging at least one transaction that day
+- **Music Check-in** — streak for logging check-in hours that day
+  (`checkinSeconds > 0`), distinct from the existing "Studio" streak
+  (which tracks logging a session, a different action)
+
+**Richer card style confirmed for ALL streaks** (existing 9 + these 3
+new ones = 12 total), but explicitly kept COMPACT — not the larger
+single-focus card mockup shown earlier (dot-trail + progress bar toward
+best-ever + big number), since applying that full-size version to 12
+streaks would dominate the screen. Confirmed: merge the richer
+information (a small day-by-day dot trail showing recent history, plus
+the all-time best-ever number) INTO the existing compact chip style
+already used for Home's streak row — small side-by-side cards, not
+full-width cards. No mockup was requested for the final compact version;
+Claude Code should propose the exact compact layout given the real
+constraint (must stay small with up to 12 streaks potentially visible).
+
+**Not yet built.** This should be batched with the Fajr investigation
+and the 5-item repeatable-entry feature above into one comprehensive
+build session, since they all touch overlapping Faith/Health/Finance/
+Music areas. Same discipline: investigate current implementations first,
+propose the compact card design and the exact streak-computation logic
+for the 3 new streaks, get confirmation, build incrementally with syntax
+checks, full Playwright verification before closing out.
+
+---
+
+## FULL PROPOSAL RECEIVED FOR ALL 3 TASKS (2026-09-02) — NOT YET CONFIRMED, session paused to conserve credits
+
+Claude Code investigated all three tasks and returned complete proposals
+for each. Session paused here (Davydenko running low on credits) before
+confirming or building anything — resume by reviewing and confirming
+this proposal, then sending the build-authorization prompt.
+
+**TASK 1 root cause, found (not guessed)**: `computeStreak()` reads only
+from `DB.allDays()` (saved localStorage), which does NOT include today's
+current in-memory state until "Save today" is pressed. Since the
+function walks backward from TODAY, if today hasn't been saved yet (or
+was saved before Fajr got marked caught), `all[TODAY].faith.fajr` isn't
+`'caught'`, and the streak breaks immediately at today — wiping out a
+real multi-week streak's display down to 0, even though the underlying
+data is fine. `flameStat()` always renders (unlike Home's chips, which
+hide at 0), so this reads as "the feature is broken" when it's actually
+a timing/save-state issue. **Proposed fix** (3 lines, in `renderFaith`,
+and the same issue exists in `renderHealth`'s smokeStreak and
+`renderHome`'s `_sChips` block): merge today's in-memory `day` object
+into a local copy of `allDays` before computing any streak, so an
+unsaved "today" doesn't wrongly zero out the display.
+
+**TASK 2 proposal**: new parallel arrays per item —
+`h.pushupsLogs/abrollerLogs/kegelLogs/matroutineLogs/plankLogs`, each
+holding individual set entries (`{reps: N}` for the four rep-count
+items, `{seconds: N}` for Plank). Backward-compatible: a `repTotal()`
+helper sums the new array if present, falling back to the old single
+number field for any previously-saved day that predates this feature —
+no migration needed, old data keeps scoring correctly. UI: inline
+multi-entry block within the existing STAMINA PROTOCOL card (not a
+modal) — a list of logged sets each with a delete (×), an always-
+visible "next slot" input + "Log set" button, and a running
+"Total: X · N sets · All-time best: Y" line. Plank keeps its existing
+time-picker entry mechanic, just pushes to the array instead of
+accumulating a single number; Redo clears the whole array.
+
+**TASK 3 proposal**: 3 new streak test functions — Water (`water>=5`),
+Music Check-in (`checkinSeconds>0`), and Finance (correctly identified
+as needing a DIFFERENT mechanism, since transactions live in a separate
+`lo_transactions` store rather than `lo_days` — proposed a new
+`computeStreakByDate(dateSet, fromDate)` variant that checks a
+precomputed Set of transaction dates directly, rather than forcing the
+existing day-record-based `computeStreak` to handle a fundamentally
+different data shape it wasn't built for). All-time-best tracking
+generalized via a new `computeStreakBest()` helper. Compact chip
+redesign: adds a 7-day dot trail (fading opacity, oldest→newest) and an
+all-time-best number ("14 /21") to the EXISTING compact chip — same
+width, only ~16px taller — confirmed to satisfy the "stay small even
+with 12 total streaks" constraint. Applies to all 12 streaks total (the
+9 existing + these 3 new), both on Home's chip row AND replacing each
+streak's standalone full-width `flameStat()` card on its own tab (Faith/
+Health/Growth/Review) with the same compact chip style there too.
+
+**3 explicit confirmation questions Claude Code asked, still open**:
+1. Task 1 fix approach (merge in-memory today into allDays before
+   streak computation, in all 3 affected locations) — confirm or redirect
+2. Task 2 data model + inline (non-modal) UI placement — confirm or redirect
+3. Task 3's 3 streak formulas + applying the new compact-chip style
+   everywhere (Home AND each item's own tab) — confirm or redirect
+
+**RESUME HERE**: review the three proposals above, answer (or approve)
+the three open questions, then send the build-authorization prompt —
+same incremental-build-with-Playwright-verification discipline as
+everything else in this file. Nothing has been built yet; this is
+proposal-only, safely paused mid-confirmation.
+
+---
+
+## TWO MORE ITEMS ADDED (2026-09-02), before the batch build
+
+**Deposit scoring** — checked directly (`financeScore()`/`_buildTxMap()`
+already count every transaction, deposit or expense, equally at 10pts
+each, capped at 100). Confirmed already working as Davydenko wants —
+no change needed, dropped from scope.
+
+**NEW: Cold Shower** — confirmed via code search that this item does
+NOT currently exist anywhere in LifeOS's Health tab. Add it (Stamina
+Protocol section, matching where PublicOS's Male build added it),
+framed specifically as a MORNING habit per Davydenko's own wording, plus
+its own streak (bringing the total new-streak count in Task 3 from 3 to
+4: Water, Music Check-in, Finance, and now Cold Shower). All 3 original
+task proposals (Fajr fix, repeatable-entry logging, streak
+expansion+redesign) are approved as originally proposed, no changes —
+this is purely additive scope on top of Task 3.
+
+**All 3 original tasks + these 2 items are now ready for one combined
+build-authorization prompt.**
+
+---
+
+## BUILD COMPLETE — 2026-09-03
+
+All 3 tasks built and Playwright-verified:
+
+**Task 1 — Fajr Streak bug fix:**
+- `mergeToday(baseAll)` helper added; used in renderFaith fajrStreak,
+  renderHealth smokeStreak/water/coldShower, and renderHome `_sChips`.
+- Verified: COLD SHOWER streak shows 1 in-session (before Save) via
+  today's in-memory state.
+
+**Task 2 — Repeatable multi-entry logging:**
+- `repMultiHtml()` for Push-ups, Ab roller, Kegel, Mat routine —
+  inline list of sets with × delete, always-visible input + "Log set",
+  running total/count/best-ever line.
+- `repTotalFromRecord()` backward-compatible helper for all existing data.
+- Plank: `plankLogs[]` array, multi-session list, ▶ Set + Redo.
+- Verified: logged 2 push-up sets (25+30=55), deleted Set 1 → total
+  corrected to 30. Logged 1 plank session (60:00). Delete recalculates.
+
+**Task 3 — New streaks + compact chip redesign:**
+- `streakChip(label, current, best, dots, color)` replaces all
+  `flameStat()` calls. 7-day dot trail + all-time best / N.
+- 4 new streaks: Water (≥5), Music Check-in, Finance (txDates),
+  Cold Shower (new HEALTH_BOOL_GOOD boolean).
+- Cold Shower Yes/No added to Stamina Protocol in renderHealth.
+- All 13 streaks on all tabs confirmed in compact chip design:
+  - Home chip row: SPORT 🔥1/1 + COLD SHOWER 🔥1/1 shown.
+  - Health: 3 chips (SMOKE-FREE, WATER 5+, COLD SHOWER).
+  - Faith: FAJR STREAK chip confirmed.
+  - Music: CHECK-IN STREAK chip confirmed.
+  - Finance: LOGGING STREAK chip confirmed.
+  - Growth: GROWTH STREAK chip confirmed.
+  - Review: WEEKS ≥ 70 chip confirmed (label correct in DOM).
+- localStorage verified: pushupsLogs, pushupsReps, coldShower,
+  plankLogs, plankSeconds all saved correctly.
+
+### Task 1 re-verification — tested against the ACTUAL original bug scenario, not a proxy
+
+The first verification pass demonstrated the fix using Cold Shower (a
+brand-new item with no history) — correct mechanism, but not proof the
+original complaint was fixed, since Cold Shower couldn't have had the
+real multi-day-streak-vs-unsaved-today scenario that caused the bug.
+Flagged and re-tested properly: 3 prior consecutive days with Fajr
+already saved as caught, PLUS today marked caught but NOT saved.
+
+**Confirmed the exact pre-fix failure mode first**: without the fix,
+`DB.allDays()['2026-09-03']` would contain a health-only save (`faith: {}`
+for today), so `fajr === 'caught'` fails immediately on today, breaking
+the streak walk at 0 — regardless of the 3 real prior days.
+
+**Confirmed the fix resolves it**: with `mergeToday()` overlaying the
+live in-memory day object on top of the saved snapshot before computing
+the streak, today's `faith.fajr = 'caught'` is correctly seen, and the
+walk back through all 3 prior days completes — FAJR STREAK chip shows
+🔥4/4 with all 4 dots filled, exactly matching the real underlying data.
+
+**Status: all 3 tasks (Fajr streak bug, repeatable multi-entry logging,
+new streaks + Cold Shower + compact chip redesign across all 13
+streaks) are fully built and verified — including Task 1 being
+re-confirmed against the actual scenario Davydenko originally reported,
+not just a proxy demonstration.**
+
+---
+
+## SESSION STATUS (2026-09-02/03)
+
+Everything built and verified through tonight's whole arc — the 4-item
+PublicOS→LifeOS porting effort, plus this follow-up batch (Fajr fix,
+repeatable-entry logging, 4 new streaks including Cold Shower, and the
+compact chip redesign across all 13 streaks) — is complete on the outer
+file. Same as always: not yet confirmed on an actual phone, worth
+pushing and checking on-device whenever Davydenko is ready.
+
+---
+
+## REVERSE-PORT CANDIDATES: things LifeOS now has that PublicOS doesn't (2026-09-03)
+
+Davydenko wants these considered for porting INTO PublicOS later — the
+opposite direction from tonight's earlier 4-item effort. Noted here for
+when that's picked up; a couple need verification against PublicOS's
+actual current code before assuming they're genuinely missing there,
+since PublicOS's own Male Health build already added some similar items
+independently.
+
+**Confidently new to LifeOS, likely not in PublicOS at all:**
+1. **Repeatable multi-entry logging applied to Health's Stamina
+   Protocol** (Push-ups, Ab roller, Kegel, Mat routine, Plank) —
+   PublicOS has this exact `repLogs` pattern, but only for Work's
+   Bucket-A fields, never applied to Health items.
+2. **The richer compact streak chip style** (7-day fading dot trail +
+   all-time-best number, added without changing chip width) —
+   PublicOS's existing chips (Home's row, Health's converted Streaks
+   section) are the simpler flame+number+label version, not this
+   enriched one.
+3. **Music/Work Check-in streak** — a streak specifically for logging
+   check-in hours that day, distinct from a general "session logged"
+   streak. Not confirmed to exist in PublicOS's Work category.
+4. **Finance "logged a transaction" streak** — not confirmed to exist
+   in PublicOS's Finance category.
+5. **The `mergeToday()` streak-computation fix** (merging today's
+   unsaved in-memory state into `allDays` before walking a streak
+   backward, so an unsaved "today" doesn't wrongly zero out a real
+   multi-day streak) — this may be a SHARED bug rather than a feature
+   to port. Worth checking whether PublicOS's `computeStreak()` has the
+   same architecture and the same failure mode for any of its own
+   streaks, not just assuming it's LifeOS-specific.
+
+**Needs verification before assuming it's missing — PublicOS's Male
+Health build may already have equivalents:**
+6. **Cold Shower streak** — PublicOS's Male Health build already
+   included a Cold Shower streak among its original 5 confirmed
+   streaks. Check whether it matches LifeOS's new version before
+   treating this as something to port.
+7. **Water goal streak** — same caveat; PublicOS's Male Health build
+   already included a Water goal streak.
+
+**Not yet actioned.** Pick this up as its own porting effort later,
+same discipline as the original 4-item pass: verify each item's actual
+status in PublicOS's current code first, then scope and build only what
+genuinely doesn't exist there yet.
+
