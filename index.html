@@ -161,6 +161,7 @@ button:active{transform:scale(0.96)}
 .profile-gender-pill{flex:1;padding:8px;border-radius:20px;border:1px solid var(--border);background:transparent;color:var(--fg);font-family:var(--mono);font-size:11px;letter-spacing:1px;cursor:pointer;transition:all .15s}
 .profile-gender-pill.selected{border-color:var(--green);background:rgba(61,220,151,0.08);color:var(--green)}
 .profile-input{width:100%;padding:10px 12px;border-radius:12px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--fg);font-family:var(--mono);font-size:13px;outline:none;box-sizing:border-box;-webkit-appearance:none}
+.profile-select{cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23888' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:32px}
 .profile-input:focus{border-color:var(--green)}
 .profile-save-btn{width:100%;margin-top:20px;padding:14px;border-radius:20px;border:1px solid var(--green);background:rgba(61,220,151,0.08);color:var(--green);font-family:var(--mono);font-size:13px;font-weight:700;letter-spacing:1px;cursor:pointer;transition:opacity .15s}
 .profile-save-btn:disabled{opacity:.35;cursor:default}
@@ -299,12 +300,14 @@ let calMonthOffset = 0;
 let convPeriod = 'weekly';
 let sbPeriod = 'daily';
 let cbPeriod = 'daily';
+let cbView = 'bars';
 let _txCountMap = null;
 let swalatInterval = null;
 let timeElapsedInterval = null;
 let cdCurrentPrayer = null;
 let musicDraftActive = false;
 let musicDraft = {};
+let musicCheckinDraft = {startTime:null,endTime:null,date:null};
 let musicRadarSort = 'mins';
 let readingDraftActive = false;
 let readingDraft = {};
@@ -627,6 +630,49 @@ function goalBarHtml(label, pct, noteText, color, color2){
     (cp>0?'<div style="position:absolute;top:50%;transform:translateY(-50%);left:calc('+cp+'% - 6px);width:12px;height:12px;border-radius:50%;background:'+color+';border:2px solid var(--card);'+glow+'"></div>':'')+
     '</div></div>';
 }
+function radarChartHtml(scores){
+  const cats=[
+    {k:'faith',  l:'FAITH',   a:-90},
+    {k:'health', l:'HEALTH',  a:-18},
+    {k:'music',  l:'MUSIC',   a:54 },
+    {k:'finance',l:'FIN',     a:126},
+    {k:'growth', l:'GROWTH',  a:198}
+  ];
+  const cx=100,cy=100,R=70,LR=88,SR=78;
+  const rad=d=>d*Math.PI/180;
+  const px=(r,a)=>+(cx+r*Math.cos(rad(a))).toFixed(2);
+  const py=(r,a)=>+(cy+r*Math.sin(rad(a))).toFixed(2);
+  let svg='<svg viewBox="0 0 200 210" style="width:100%;height:auto;display:block">';
+  // grid rings at 25/50/75/100
+  [25,50,75,100].forEach(pct=>{
+    const r=R*pct/100;
+    const pts=cats.map(c=>px(r,c.a)+','+py(r,c.a)).join(' ');
+    svg+='<polygon points="'+pts+'" fill="none" stroke="var(--border)" stroke-width="0.7"/>';
+  });
+  // spoke lines
+  cats.forEach(c=>{
+    svg+='<line x1="'+cx+'" y1="'+cy+'" x2="'+px(R,c.a)+'" y2="'+py(R,c.a)+'" stroke="var(--border)" stroke-width="0.7"/>';
+  });
+  // data polygon
+  const pts=cats.map(c=>{ const sc=scores[c.k]||0; return px(R*sc/100,c.a)+','+py(R*sc/100,c.a); }).join(' ');
+  svg+='<polygon points="'+pts+'" fill="var(--home)" fill-opacity="0.18" stroke="var(--home)" stroke-width="1.5" stroke-linejoin="round"/>';
+  // data dots + score numbers
+  cats.forEach(c=>{
+    const sc=scores[c.k]||0;
+    if(sc>0){
+      svg+='<circle cx="'+px(R*sc/100,c.a)+'" cy="'+py(R*sc/100,c.a)+'" r="3" fill="var(--home)"/>';
+      svg+='<text x="'+px(SR*sc/100,c.a)+'" y="'+py(SR*sc/100,c.a)+'" text-anchor="middle" dominant-baseline="central" font-size="8" font-weight="700" font-family="Space Mono,monospace" fill="var(--home)">'+sc+'</text>';
+    }
+  });
+  // spoke labels
+  cats.forEach(c=>{
+    const lx=px(LR,c.a), ly=py(LR,c.a);
+    const ta=Math.abs(c.a)<=30||Math.abs(c.a-180)<=30?'middle':(Math.cos(rad(c.a))<-0.3?'end':'start');
+    svg+='<text x="'+lx+'" y="'+ly+'" text-anchor="'+ta+'" dominant-baseline="central" font-size="6" font-weight="700" font-family="Space Mono,monospace" fill="var(--mute)">'+c.l+'</text>';
+  });
+  svg+='</svg>';
+  return svg;
+}
 function isoCubeHtml(scores){
   const cfg=[
     {k:'faith',c:'var(--faith)',l:'FAITH'},
@@ -756,16 +802,36 @@ function fiveSliceDonutHtml(scores, label){
 }
 // Colours assigned once so pie slices and legend squares always match.
 const FIN_CAT_COLORS={
-  'Rent':            'var(--finance)',
-  'Food':            'var(--green)',
-  'Business costs':  'var(--cyan)',
-  'Transport':       'var(--music)',
-  'Weed':            'var(--amber)',
-  'Cigarettes':      'var(--red)',
-  'Given to people': 'var(--faith)',
-  'Home bills':      'var(--health)',
-  'Other':           'var(--growth)'
+  'Rent':                      'var(--finance)',
+  'Food':                      'var(--green)',
+  'Business costs':            'var(--cyan)',
+  'Transport':                 'var(--music)',
+  'Weed':                      'var(--amber)',
+  'Cigarettes':                'var(--red)',
+  'Given to people':           'var(--faith)',
+  'Home bills':                'var(--health)',
+  'Other':                     'var(--growth)',
+  'Entertainment/Going out':   'var(--music)',
+  'Alcohol/Bar':               'var(--red)',
+  'Gym/Sports membership':     'var(--health)',
+  'Electronics/Gadgets':       'var(--cyan)',
+  'Clothing':                  'var(--faith)',
+  'Car/Motorcycle maintenance':'var(--planning)',
+  'Subscriptions':             'var(--growth)',
+  'Grooming/Barber':           'var(--amber)',
+  'Savings/Investment':        'var(--green)',
+  'Family support':            'var(--amber)'
 };
+
+function finCats(){
+  return [
+    'Rent','Food','Business costs','Transport','Weed','Cigarettes',
+    'Given to people','Home bills','Other',
+    'Entertainment/Going out','Alcohol/Bar','Gym/Sports membership',
+    'Electronics/Gadgets','Clothing','Car/Motorcycle maintenance',
+    'Subscriptions','Grooming/Barber','Savings/Investment','Family support'
+  ];
+}
 
 // 3D tilted pie for Finance's 9 categories.
 // catData = [{name,amount,pct,color}], non-zero only, any order.
@@ -860,6 +926,79 @@ function financePieHtml(catData, total){
     `<div style="font-family:DM Serif Display,serif;font-size:28px;font-weight:700;color:var(--text);text-align:center;line-height:1;margin-top:1px">${total.toLocaleString()}</div>`;
 
   return `<div style="padding:8px 0">${svg}${legend}${statLine}</div>`;
+}
+
+// Flat donut chart for the daily Spending Breakdown section.
+// cats = full finCats() array, todayTx = today's transactions array.
+// Non-zero categories become proportional arcs; zero categories appear in the full legend only.
+// Slices >= 12% of total get a leader-line label; all others rely on the legend below.
+function spendingBreakdownHtml(cats, todayTx){
+  const R=90,r=54,LEAD=14,LABEL_THRESH=12;
+  const GAP=0.04;
+  const f=n=>n.toFixed(2);
+  const sin=Math.sin,cos=Math.cos;
+
+  const amounts=cats.map(c=>todayTx.filter(x=>x.type==='expense'&&x.category===c).reduce((s,t)=>s+t.amount,0));
+  const total=amounts.reduce((s,a)=>s+a,0);
+
+  if(!total) return '<div class="card" style="text-align:center;padding:24px 16px;color:var(--mute);font-size:13px">No spending recorded today</div>';
+
+  const nonZero=cats.map((c,i)=>({c,a:amounts[i]})).filter(x=>x.a>0);
+  const TARC=2*Math.PI-GAP*nonZero.length;
+  let ang=0;
+  const slices=nonZero.map(({c,a})=>{
+    const span=a/total*TARC;
+    const sl={c,a,a0:ang,a1:ang+span,pct:Math.round(a/total*100)};
+    ang+=span+GAP;
+    return sl;
+  });
+
+  const pt=(a,rad)=>({x:rad*sin(a),y:-rad*cos(a)});
+
+  function arcPath(a0,a1,outerR,innerR){
+    const p0o=pt(a0,outerR),p1o=pt(a1,outerR);
+    const p0i=pt(a0,innerR),p1i=pt(a1,innerR);
+    const lg=(a1-a0)>Math.PI?1:0;
+    return `M${f(p0o.x)},${f(p0o.y)} A${outerR},${outerR},0,${lg},1,${f(p1o.x)},${f(p1o.y)} L${f(p1i.x)},${f(p1i.y)} A${innerR},${innerR},0,${lg},0,${f(p0i.x)},${f(p0i.y)} Z`;
+  }
+
+  let svg=`<svg viewBox="-168 -128 336 280" style="width:100%;max-width:320px;height:auto;display:block;margin:0 auto">`;
+
+  slices.forEach(({c,a0,a1})=>{
+    const col=FIN_CAT_COLORS[c]||'var(--mute)';
+    svg+=`<path d="${arcPath(a0,a1,R,r)}" fill="${col}"/>`;
+  });
+
+  slices.forEach(({c,a,a0,a1,pct})=>{
+    if(pct<LABEL_THRESH) return;
+    const mid=(a0+a1)/2;
+    const rim=pt(mid,R);
+    const dx=rim.x,dy=rim.y;
+    const len=Math.sqrt(dx*dx+dy*dy)||1;
+    const nx=dx/len,ny=dy/len;
+    const lx=f(rim.x+nx*LEAD),ly=f(rim.y+ny*LEAD);
+    const tx=f(rim.x+nx*(LEAD+4)),ty=rim.y+ny*(LEAD+4);
+    const anchor=dx>=0?'start':'end';
+    const short=c.length>12?c.slice(0,11)+'…':c;
+    svg+=`<line x1="${f(rim.x)}" y1="${f(rim.y)}" x2="${lx}" y2="${ly}" stroke="var(--text)" stroke-width="0.8" opacity="0.5"/>`;
+    svg+=`<text text-anchor="${anchor}" font-size="7" font-family="Space Mono,monospace" fill="var(--text)"><tspan x="${tx}" y="${f(ty-2)}">${short}</tspan><tspan x="${tx}" dy="9" fill="var(--finance)">${a.toLocaleString()}</tspan></text>`;
+  });
+
+  svg+=`<text x="0" y="-5" text-anchor="middle" font-size="7.5" font-family="Space Mono,monospace" fill="var(--mute)" letter-spacing="0.05em">TOTAL SPENT</text>`;
+  svg+=`<text x="0" y="14" text-anchor="middle" font-size="21" font-family="DM Serif Display,serif" font-weight="700" fill="var(--finance)">${total.toLocaleString()}</text>`;
+  svg+='</svg>';
+
+  const legendItems=cats.map((c,i)=>{
+    const col=FIN_CAT_COLORS[c]||'var(--mute)';
+    const amt=amounts[i];
+    return `<div style="display:flex;align-items:center;gap:5px;padding:2px 0">`+
+      `<span style="width:8px;height:8px;border-radius:2px;background:${col};flex-shrink:0"></span>`+
+      `<span style="font-family:var(--mono);font-size:8px;color:var(--mute);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c}</span>`+
+      `<span style="font-family:var(--mono);font-size:8px;color:${amt?'var(--text)':'var(--mute)'}">${amt?amt.toLocaleString():'—'}</span>`+
+      `</div>`;
+  }).join('');
+  const legend=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:0 10px;margin-top:10px;padding-top:8px;border-top:1px solid var(--border)">${legendItems}</div>`;
+  return `<div class="card">${svg}${legend}</div>`;
 }
 
 // Time Budget multi-slice pie — direct adaptation of financePieHtml for 6 activity segments.
@@ -1589,7 +1728,7 @@ function compareDayHtml(tab, color, cachedAll){
     rows+=cmpRow('Total spend',
       '<span style="color:'+(rTot>0?'var(--red)':'var(--mute)')+'">'+rTot.toLocaleString()+'</span>',
       '<span style="color:'+(tTot>0?'var(--red)':'var(--mute)')+'">'+tTot.toLocaleString()+'</span>');
-    ['Rent','Food','Business costs','Transport','Weed','Cigarettes','Given to people','Home bills','Other'].forEach(cat=>{
+    finCats().forEach(cat=>{
       const rA=rTx.filter(t=>t.type==='expense'&&t.category===cat).reduce((a,b)=>a+b.amount,0);
       const tA=tTx.filter(t=>t.type==='expense'&&t.category===cat).reduce((a,b)=>a+b.amount,0);
       if(rA>0||tA>0) rows+=cmpRow(cat, rA?rA.toLocaleString():'-', tA?tA.toLocaleString():'-');
@@ -1863,8 +2002,12 @@ function renderHome(){
     +'<button class="opt-btn cb-period-btn'+(cbPeriod==='weekly'?' sel':'')+'" data-cb-period="weekly">Weekly</button>'
     +'<button class="opt-btn cb-period-btn'+(cbPeriod==='monthly'?' sel':'')+'" data-cb-period="monthly">Monthly</button>'
     +'</div>';
+  const cbViewSel='<div class="btn-group" style="margin-bottom:10px">'
+    +'<button class="opt-btn cb-view-btn'+(cbView==='bars'?' sel':'')+'" data-cb-view="bars">Bars</button>'
+    +'<button class="opt-btn cb-view-btn'+(cbView==='radar'?' sel':'')+'" data-cb-view="radar">Radar</button>'
+    +'</div>';
   html += sectionLabel('CATEGORY BALANCE','var(--home)');
-  html += '<div class="card">'+cbPeriodSel+isoCubeHtml(cbScores)+'</div>';
+  html += '<div class="card">'+cbPeriodSel+cbViewSel+(cbView==='radar'?radarChartHtml(cbScores):isoCubeHtml(cbScores))+'</div>';
 
   // Score Breakdown — period-averaged pie (reuses convAll already loaded above)
   let sbKeys;
@@ -2073,6 +2216,9 @@ function renderHome(){
   });
   s.querySelectorAll('.cb-period-btn').forEach(b=>{
     b.addEventListener('click',()=>{ cbPeriod=b.dataset.cbPeriod; renderHome(); });
+  });
+  s.querySelectorAll('.cb-view-btn').forEach(b=>{
+    b.addEventListener('click',()=>{ cbView=b.dataset.cbView; renderHome(); });
   });
   const brDismissBtn = document.getElementById('dismiss-backup-reminder');
   if (brDismissBtn) brDismissBtn.addEventListener('click', () => {
@@ -3163,7 +3309,7 @@ function openUpdateBookModal(id){
   });
 }
 function openTxModal(){
-  const cats = ['Rent','Food','Business costs','Transport','Weed','Cigarettes','Given to people','Home bills','Other'];
+  const cats = finCats();
   let type='expense', category=cats[0];
   function render(){
     let html = '<div class="modal-title">Log transaction</div>';
@@ -3171,7 +3317,7 @@ function openTxModal(){
     html += '<div class="btn-group">'+['deposit','withdraw','income','expense'].map(t=>'<button class="opt-btn tx-type'+(t===type?' sel':'')+'" data-type="'+t+'">'+t.charAt(0).toUpperCase()+t.slice(1)+'</button>').join('')+'</div>';
     if(type==='expense'){
       html += '<label style="font-family:var(--mono);font-size:9px;color:var(--mute)">CATEGORY</label>';
-      html += '<div class="btn-group">'+cats.map(c=>'<button class="opt-btn tx-cat'+(c===category?' sel':'')+'" data-cat="'+c+'">'+c+'</button>').join('')+'</div>';
+      html += '<select id="tx-cat-sel" class="profile-input profile-select">'+cats.map(c=>'<option value="'+c+'"'+(c===category?' selected':'')+'>'+c+'</option>').join('')+'</select>';
       if(category==='Other'){
         html += '<label style="font-family:var(--mono);font-size:9px;color:var(--mute)">DESCRIPTION (required)</label>';
         html += '<input type="text" class="input" id="tx-note" placeholder="What was this for?">';
@@ -3182,7 +3328,7 @@ function openTxModal(){
     openModal(html);
     document.getElementById('tx-cancel').addEventListener('click', closeModal);
     document.querySelectorAll('.tx-type').forEach(b=>b.addEventListener('click', ()=>{ type=b.dataset.type; render(); }));
-    document.querySelectorAll('.tx-cat').forEach(b=>b.addEventListener('click', ()=>{ category=b.dataset.cat; render(); }));
+    const catSel=document.getElementById('tx-cat-sel'); if(catSel) catSel.addEventListener('change',e=>{ category=e.target.value; render(); });
     document.getElementById('tx-save').addEventListener('click', ()=>{
       const amount = parseFloat(document.getElementById('tx-amt').value);
       if(isNaN(amount) || amount<=0) return;
@@ -3203,7 +3349,7 @@ function openTxModal(){
 }
 
 function openEditTxModal(tx){
-  const cats = ['Rent','Food','Business costs','Transport','Weed','Cigarettes','Given to people','Home bills','Other'];
+  const cats = finCats();
   let type = tx.type, category = tx.category||cats[0], date = tx.date, editAmt = tx.amount;
   let editNote = tx.note || '';
   function syncAmt(){ const el=document.getElementById('edit-tx-amt'); if(el){ const v=parseFloat(el.value); if(!isNaN(v)&&v>0) editAmt=v; } }
@@ -3219,9 +3365,7 @@ function openEditTxModal(tx){
     ).join('')+'</div>';
     if(type==='expense'){
       html += '<label style="font-family:var(--mono);font-size:9px;color:var(--mute)">CATEGORY</label>';
-      html += '<div class="btn-group">'+cats.map(c=>
-        '<button class="opt-btn edit-tx-cat'+(c===category?' sel':'')+'" data-cat="'+c+'">'+c+'</button>'
-      ).join('')+'</div>';
+      html += '<select id="edit-tx-cat-sel" class="profile-input profile-select">'+cats.map(c=>'<option value="'+c+'"'+(c===category?' selected':'')+'>'+c+'</option>').join('')+'</select>';
       if(category==='Other'){
         html += '<label style="font-family:var(--mono);font-size:9px;color:var(--mute)">DESCRIPTION (required)</label>';
         html += '<input type="text" class="input" id="edit-tx-note" placeholder="What was this for?" value="'+editNote.replace(/"/g,'&quot;')+'">';
@@ -3237,7 +3381,7 @@ function openEditTxModal(tx){
     openModal(html);
     document.getElementById('edit-tx-cancel').addEventListener('click', closeModal);
     document.querySelectorAll('.edit-tx-type').forEach(b=>b.addEventListener('click', ()=>{ syncAmt(); syncDate(); syncNote(); type=b.dataset.type; render(); }));
-    document.querySelectorAll('.edit-tx-cat').forEach(b=>b.addEventListener('click', ()=>{ syncAmt(); syncNote(); category=b.dataset.cat; render(); }));
+    const eCatSel=document.getElementById('edit-tx-cat-sel'); if(eCatSel) eCatSel.addEventListener('change',e=>{ syncAmt(); syncNote(); category=e.target.value; render(); });
     document.getElementById('edit-tx-save').addEventListener('click', ()=>{
       syncDate(); syncAmt(); syncNote();
       if(!date||editAmt<=0) return;
@@ -3607,6 +3751,9 @@ function renderMusicReport(s){
 function renderMusic(){
   const s = document.getElementById('s-music');
   if(musicReportOpen){ renderMusicReport(s); return; }
+  if(musicCheckinDraft.date && musicCheckinDraft.date!==EDIT_DATE){
+    musicCheckinDraft.startTime=null;musicCheckinDraft.endTime=null;musicCheckinDraft.date=null;
+  }
   const projects = DB.projects();
   const active = projects.filter(p=>p.status==='active');
   const planned = projects.filter(p=>p.status==='planned');
@@ -3630,6 +3777,27 @@ function renderMusic(){
 
   html += sectionLabel('DONE / HISTORY');
   html += '<div class="card">'+(done.length ? done.map(p=>'<div class="checkline"><span class="box" style="color:var(--green)">&#9632;</span>'+escHtml(p.name)+'</div>').join('') : '<div style="font-size:11px;color:var(--mute)">Nothing finished yet.</div>')+'</div>';
+
+  html += sectionLabel('STUDIO CHECK-IN','var(--music)');
+  const _ciSecs=day.music.checkinSeconds||0;
+  const _fmtCi=s=>{const h=Math.floor(s/3600),m=Math.round((s%3600)/60);return h>0?h+'h'+(m>0?' '+m+'m':''):m+'m';};
+  const _ac='var(--music)';
+  html+='<div class="card"><div class="checkline" style="cursor:default">';
+  html+='<span style="flex:1;font-size:12px">Hours in studio today</span>';
+  if(_ciSecs>0){
+    html+='<span style="font-family:var(--mono);font-size:11px;color:'+_ac+';margin-right:6px">'+_fmtCi(_ciSecs)+'</span>';
+    if(musicCheckinDraft.startTime&&musicCheckinDraft.endTime&&musicCheckinDraft.date===EDIT_DATE){
+      html+='<button id="ci-chip" style="font-family:var(--mono);font-size:9px;padding:2px 7px;border-radius:4px;border:1px solid '+_ac+';background:rgba(224,180,84,.1);color:'+_ac+';cursor:pointer;margin-right:4px">'+musicCheckinDraft.startTime+' → '+musicCheckinDraft.endTime+'</button>';
+    }
+    html+='<button id="ci-redo" style="font-family:var(--mono);font-size:9px;padding:2px 7px;border-radius:4px;border:1px solid var(--border);background:transparent;color:var(--mute);cursor:pointer">Redo</button>';
+  } else if(musicCheckinDraft.startTime&&musicCheckinDraft.date===EDIT_DATE){
+    html+='<span style="font-family:var(--mono);font-size:11px;color:'+_ac+';margin-right:6px">'+musicCheckinDraft.startTime+' →</span>';
+    html+='<button id="ci-set-end" style="font-family:var(--mono);font-size:9px;padding:2px 8px;border-radius:4px;border:1px solid '+_ac+';background:rgba(224,180,84,.1);color:'+_ac+';cursor:pointer">Set End</button>';
+  } else {
+    html+='<span style="font-family:var(--mono);font-size:11px;color:var(--mute);margin-right:6px">--</span>';
+    html+='<button id="ci-set" style="font-family:var(--mono);font-size:9px;padding:2px 8px;border-radius:4px;border:1px solid '+_ac+';background:rgba(224,180,84,.1);color:'+_ac+';cursor:pointer">&#9654; Set</button>';
+  }
+  html+='</div></div>';
 
   html += sectionLabel('TODAY','var(--music)');
   const mussSess = day.music.sessions || [];
@@ -3700,6 +3868,35 @@ function renderMusic(){
   html += '<button class="save-btn" id="save-music">'+saveBtnLabel()+'</button>';
   s.innerHTML = html;
   wireCmpArrows(s, 'music', renderMusic);
+
+  // Check-in wire
+  const ciSet=s.querySelector('#ci-set');
+  const ciSetEnd=s.querySelector('#ci-set-end');
+  const ciChip=s.querySelector('#ci-chip');
+  const ciRedo=s.querySelector('#ci-redo');
+  if(ciSet) ciSet.addEventListener('click',()=>{
+    openTimePickerModal('Check-in start',musicCheckinDraft.startTime||'07:00',v=>{
+      musicCheckinDraft.startTime=v;musicCheckinDraft.date=EDIT_DATE;renderMusic();
+    });
+  });
+  if(ciSetEnd) ciSetEnd.addEventListener('click',()=>{
+    openTimePickerModal('Check-out time',musicCheckinDraft.endTime||'09:00',v=>{
+      musicCheckinDraft.endTime=v;musicCheckinDraft.date=EDIT_DATE;
+      day.music.checkinSeconds=deriveMinutes(musicCheckinDraft.startTime,musicCheckinDraft.endTime)*60;
+      renderMusic();
+    });
+  });
+  if(ciChip) ciChip.addEventListener('click',()=>{
+    openTimePickerModal('Check-in start',musicCheckinDraft.startTime||'07:00',v=>{
+      musicCheckinDraft.startTime=v;musicCheckinDraft.date=EDIT_DATE;
+      if(musicCheckinDraft.endTime) day.music.checkinSeconds=deriveMinutes(v,musicCheckinDraft.endTime)*60;
+      renderMusic();
+    });
+  });
+  if(ciRedo) ciRedo.addEventListener('click',()=>{
+    musicCheckinDraft.startTime=null;musicCheckinDraft.endTime=null;musicCheckinDraft.date=null;
+    day.music.checkinSeconds=0;renderMusic();
+  });
 
   document.getElementById('add-project').addEventListener('click', openAddProjectModal);
   s.querySelectorAll('[data-proj]').forEach(c=>{
@@ -3826,7 +4023,7 @@ function renderMusic(){
 
 /* ============ FINANCE ============ */
 function renderFinanceReport(s){
-  const FIN_CATS=['Rent','Food','Business costs','Transport','Weed','Cigarettes','Given to people','Home bills','Other'];
+  const FIN_CATS=finCats();
   const allTxs=DB.transactions();
 
   // Period filter
@@ -3980,12 +4177,8 @@ function renderFinance(){
   html += '<button class="btn-ghost" id="add-tx" style="border-color:var(--finance);color:var(--finance)">+ Log deposit, withdrawal, income, or expense</button>';
 
   html += sectionLabel('SPENDING BREAKDOWN, TODAY');
-  const cats = ['Rent','Food','Business costs','Transport','Weed','Cigarettes','Given to people','Home bills','Other'];
   const todayTx = txs.filter(t=>t.date===EDIT_DATE);
-  html += '<div class="card">'+cats.map(c=>{
-    const amt = todayTx.filter(x=>x.type==='expense'&&x.category===c).reduce((a,b)=>a+b.amount,0);
-    return '<div class="stat-row"><span>'+c+'</span><span style="color:var(--finance);font-family:var(--mono)">'+(amt?amt.toLocaleString():'-')+'</span></div>';
-  }).join('')+'</div>';
+  html += spendingBreakdownHtml(finCats(), todayTx);
 
   html += sectionLabel('RECENT TRANSACTIONS', 'var(--finance)');
   const recentTxs = txs.slice().sort((a,b)=>b.date.localeCompare(a.date)||(b.id-a.id)).slice(0,20);
@@ -5102,7 +5295,7 @@ function renderReview(){
   const wExpense = wTxs.filter(t=>t.type==='expense').reduce((a,b)=>a+b.amount,0);
   const wDeposit = wTxs.filter(t=>t.type==='deposit').reduce((a,b)=>a+b.amount,0);
   const wWithdraw = wTxs.filter(t=>t.type==='withdraw').reduce((a,b)=>a+b.amount,0);
-  const expCats2 = ['Rent','Food','Business costs','Transport','Weed','Cigarettes','Given to people','Home bills','Other'];
+  const expCats2 = finCats();
   let topCat=null, topCatAmt=0;
   expCats2.forEach(c=>{ const amt=wTxs.filter(t=>t.type==='expense'&&t.category===c).reduce((a,b)=>a+b.amount,0); if(amt>topCatAmt){topCatAmt=amt;topCat=c;} });
   html += '<div class="card">';
