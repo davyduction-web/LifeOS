@@ -2064,6 +2064,179 @@ function calendarHtml(all, calY, calM, calMode){
   return h;
 }
 
+/* ============ DAILY QUOTES ============ */
+// Sources:
+//  1. Marcus Aurelius (Meditations) — public domain, ancient
+//  2. Best Traders — Buffett, Livermore, Lynch, Munger, Templeton, Soros, Jones, Seykota,
+//     Dalio, Druckenmiller, Bogle, Darvas, Zweig — short widely-cited attributed maxims
+//  3. Jim Rohn (d. 2009) — short widely-circulated attributed aphorisms only (<25 words each);
+//     no extended passages from his books/seminars; same reasoning as trader quotes above
+//  4. Andrew Carnegie (d. 1919) — public domain
+const DAILY_QUOTES=[
+// ── Marcus Aurelius ──────────────────────────────────────────────────────────
+{text:"You have power over your mind, not outside events. Realize this, and you will find strength.",author:"Marcus Aurelius"},
+{text:"Waste no more time arguing about what a good man should be. Be one.",author:"Marcus Aurelius"},
+{text:"Very little is needed to make a happy life; it is all within yourself, in your way of thinking.",author:"Marcus Aurelius"},
+{text:"Confine yourself to the present.",author:"Marcus Aurelius"},
+{text:"If it is not right, do not do it; if it is not true, do not say it.",author:"Marcus Aurelius"},
+{text:"Execute every act of thy life as though it were thy last.",author:"Marcus Aurelius"},
+{text:"The impediment to action advances action. What stands in the way becomes the way.",author:"Marcus Aurelius"},
+{text:"Never let the future disturb you. You will meet it, if you have to, with the same weapons of reason which today arm you against the present.",author:"Marcus Aurelius"},
+{text:"The art of living is more like wrestling than dancing.",author:"Marcus Aurelius"},
+{text:"Receive without pride, relinquish without struggle.",author:"Marcus Aurelius"},
+{text:"Never esteem anything as of advantage to you that will make you break your word or lose your self-respect.",author:"Marcus Aurelius"},
+{text:"Accept the things to which fate binds you, and love the people with whom fate brings you together.",author:"Marcus Aurelius"},
+{text:"It is not death that a man should fear, but he should fear never beginning to live.",author:"Marcus Aurelius"},
+{text:"Do not indulge in dreams of what you have not, but count up the chief of the blessings you do have.",author:"Marcus Aurelius"},
+{text:"How much time he saves who does not look to see what his neighbor says or does or thinks.",author:"Marcus Aurelius"},
+{text:"The object of life is not to be on the side of the majority, but to escape finding oneself in the ranks of the insane.",author:"Marcus Aurelius"},
+{text:"Nowhere can man find a quieter or more untroubled retreat than in his own soul.",author:"Marcus Aurelius"},
+{text:"The universe is change; our life is what our thoughts make it.",author:"Marcus Aurelius"},
+{text:"Perfection of character is this: to live each day as if it were your last, without frenzy, without apathy, without pretense.",author:"Marcus Aurelius"},
+{text:"Dwell on the beauty of life. Watch the stars, and see yourself running with them.",author:"Marcus Aurelius"},
+{text:"The soul becomes dyed with the color of its thoughts.",author:"Marcus Aurelius"},
+{text:"You could leave life right now. Let that determine what you do and say and think.",author:"Marcus Aurelius"},
+{text:"Be tolerant with others and strict with yourself.",author:"Marcus Aurelius"},
+{text:"If someone can prove me wrong and show me my mistake in any thought or action, I shall gladly change.",author:"Marcus Aurelius"},
+{text:"Do not act as if you had ten thousand years to live.",author:"Marcus Aurelius"},
+{text:"When you arise in the morning, think of what a privilege it is to be alive, to think, to enjoy, to love.",author:"Marcus Aurelius"},
+{text:"Loss is nothing else but change, and change is Nature's delight.",author:"Marcus Aurelius"},
+{text:"The best revenge is to be unlike him who performed the injury.",author:"Marcus Aurelius"},
+{text:"Treat what you don't have as nonexistent.",author:"Marcus Aurelius"},
+{text:"A man's life is a mere moment, his existence a flux.",author:"Marcus Aurelius"},
+{text:"If you are distressed by anything external, the pain is not due to the thing itself, but to your estimate of it; and this you have the power to revoke at any moment.",author:"Marcus Aurelius"},
+{text:"Reject your sense of injury and the injury itself disappears.",author:"Marcus Aurelius"},
+{text:"The first rule is to keep an untroubled spirit. The second is to look things in the face and know them for what they are.",author:"Marcus Aurelius"},
+{text:"Each day provides its own gifts.",author:"Marcus Aurelius"},
+{text:"Look back over the past, with its changing empires that rose and fell, and you can foresee the future, too.",author:"Marcus Aurelius"},
+{text:"Be content to seem what you really are.",author:"Marcus Aurelius"},
+{text:"What we cannot bear removes us from life; what lasts can be borne.",author:"Marcus Aurelius"},
+{text:"The present moment always will have been.",author:"Marcus Aurelius"},
+{text:"Your mind will take the shape of what you frequently hold in thought, for the human spirit is colored by such impressions.",author:"Marcus Aurelius"},
+{text:"How soon will you be ashes or bare bone, and there will be either a great name or not even a name.",author:"Marcus Aurelius"},
+{text:"Everything is only for a day, both that which remembers and that which is remembered.",author:"Marcus Aurelius"},
+{text:"Think not disdainfully of death, but look on it with favor; for even death is one of the things that Nature wills.",author:"Marcus Aurelius"},
+{text:"Practice even what seems impossible.",author:"Marcus Aurelius"},
+{text:"Never be heard complaining, not even in your own mind.",author:"Marcus Aurelius"},
+{text:"Make yourself good now, while you still have time; while you still can.",author:"Marcus Aurelius"},
+// ── Warren Buffett ────────────────────────────────────────────────────────────
+{text:"Rule No. 1: Never lose money. Rule No. 2: Never forget rule No. 1.",author:"Warren Buffett"},
+{text:"Price is what you pay. Value is what you get.",author:"Warren Buffett"},
+{text:"Be fearful when others are greedy and greedy when others are afraid.",author:"Warren Buffett"},
+{text:"The stock market is designed to transfer money from the active to the patient.",author:"Warren Buffett"},
+{text:"It's far better to buy a wonderful company at a fair price than a fair company at a wonderful price.",author:"Warren Buffett"},
+{text:"Risk comes from not knowing what you're doing.",author:"Warren Buffett"},
+{text:"Our favorite holding period is forever.",author:"Warren Buffett"},
+{text:"The most important quality for an investor is temperament, not intellect.",author:"Warren Buffett"},
+{text:"Only buy something that you'd be perfectly happy to hold if the market shut down for 10 years.",author:"Warren Buffett"},
+{text:"Time is the friend of the wonderful company, the enemy of the mediocre.",author:"Warren Buffett"},
+{text:"Wide diversification is only required when investors do not understand what they are doing.",author:"Warren Buffett"},
+{text:"Someone's sitting in the shade today because someone planted a tree a long time ago.",author:"Warren Buffett"},
+{text:"The best investment you can make is in yourself.",author:"Warren Buffett"},
+{text:"Never invest in a business you cannot understand.",author:"Warren Buffett"},
+{text:"In the business world, the rearview mirror is always clearer than the windshield.",author:"Warren Buffett"},
+// ── Jesse Livermore ───────────────────────────────────────────────────────────
+{text:"The market is never wrong — opinions often are.",author:"Jesse Livermore"},
+{text:"There is nothing new in Wall Street. There can't be because speculation is as old as the hills.",author:"Jesse Livermore"},
+{text:"The human side of every person is the greatest enemy of the average investor or speculator.",author:"Jesse Livermore"},
+{text:"It is not good to be too curious about all the reasons behind price movements.",author:"Jesse Livermore"},
+{text:"A loss never bothers me after I take it. But being wrong — not taking the loss — that is what does the damage to the pocketbook and to the soul.",author:"Jesse Livermore"},
+{text:"There is only one side to the market, and it is not the bull side or the bear side, but the right side.",author:"Jesse Livermore"},
+{text:"Money is made by sitting, not trading.",author:"Jesse Livermore"},
+// ── Paul Tudor Jones ──────────────────────────────────────────────────────────
+{text:"Every day I assume every position I have is wrong.",author:"Paul Tudor Jones"},
+{text:"Don't focus on making money; focus on protecting what you have.",author:"Paul Tudor Jones"},
+{text:"I believe the very best money is made at the market turns.",author:"Paul Tudor Jones"},
+// ── George Soros ──────────────────────────────────────────────────────────────
+{text:"It's not whether you're right or wrong that's important, but how much money you make when you're right and how much you lose when you're wrong.",author:"George Soros"},
+{text:"I'm only rich because I know when I'm wrong.",author:"George Soros"},
+{text:"Markets are constantly in a state of uncertainty and flux, and money is made by discounting the obvious and betting on the unexpected.",author:"George Soros"},
+// ── Peter Lynch ───────────────────────────────────────────────────────────────
+{text:"Behind every stock is a company. Find out what it's doing.",author:"Peter Lynch"},
+{text:"Know what you own, and know why you own it.",author:"Peter Lynch"},
+{text:"Never invest in any idea you can't illustrate with a crayon.",author:"Peter Lynch"},
+{text:"The key to making money in stocks is not to get scared out of them.",author:"Peter Lynch"},
+{text:"In this business, if you're good, you're right six times out of ten.",author:"Peter Lynch"},
+// ── Charlie Munger ────────────────────────────────────────────────────────────
+{text:"Invert, always invert: turn a problem or situation upside down. Look at it backward.",author:"Charlie Munger"},
+{text:"Show me the incentive and I'll show you the outcome.",author:"Charlie Munger"},
+{text:"It's not supposed to be easy. Anyone who finds it easy is stupid.",author:"Charlie Munger"},
+{text:"All I want to know is where I'm going to die, so I'll never go there.",author:"Charlie Munger"},
+{text:"The best thing a human being can do is to help another human being know more.",author:"Charlie Munger"},
+// ── John Templeton ────────────────────────────────────────────────────────────
+{text:"The four most dangerous words in investing are: 'This time it's different.'",author:"John Templeton"},
+{text:"Bull markets are born on pessimism, grow on skepticism, mature on optimism, and die on euphoria.",author:"John Templeton"},
+{text:"The time of maximum pessimism is the best time to buy, and the time of maximum optimism is the best time to sell.",author:"John Templeton"},
+// ── Ed Seykota ────────────────────────────────────────────────────────────────
+{text:"Win or lose, everybody gets what they want out of the market.",author:"Ed Seykota"},
+{text:"The elements of good trading are: cutting losses, cutting losses, and cutting losses.",author:"Ed Seykota"},
+{text:"Risk no more than you can afford to lose, and also risk enough so that a win is meaningful.",author:"Ed Seykota"},
+// ── Ray Dalio ─────────────────────────────────────────────────────────────────
+{text:"Pain plus reflection equals progress.",author:"Ray Dalio"},
+{text:"The biggest mistake investors make is to believe that what happened in the recent past is likely to persist.",author:"Ray Dalio"},
+{text:"To make money in the markets, you have to think independently and be humble.",author:"Ray Dalio"},
+// ── Stan Druckenmiller ────────────────────────────────────────────────────────
+{text:"The way to build long-term returns is through preservation of capital and home runs.",author:"Stan Druckenmiller"},
+// ── Jack Bogle ────────────────────────────────────────────────────────────────
+{text:"Don't look for the needle in the haystack. Just buy the haystack.",author:"Jack Bogle"},
+{text:"Time is your friend; impulse is your enemy.",author:"Jack Bogle"},
+// ── Nicolas Darvas ────────────────────────────────────────────────────────────
+{text:"I have no ego in the stock market. If I make a mistake I sell immediately.",author:"Nicolas Darvas"},
+{text:"The only concern is the verdict of the market.",author:"Nicolas Darvas"},
+// ── Jim Rohn ─────────────────────────────────────────────────────────────────
+// Short widely-circulated attributed maxims only (<25 words each, no book passages)
+{text:"You are the average of the five people you spend the most time with.",author:"Jim Rohn"},
+{text:"Don't wish it were easier; wish you were better.",author:"Jim Rohn"},
+{text:"Success is nothing more than a few simple disciplines, practiced every day.",author:"Jim Rohn"},
+{text:"Formal education will make you a living; self-education will make you a fortune.",author:"Jim Rohn"},
+{text:"You must either modify your dreams or magnify your skills.",author:"Jim Rohn"},
+{text:"Work harder on yourself than you do on your job.",author:"Jim Rohn"},
+{text:"Discipline is the bridge between goals and accomplishment.",author:"Jim Rohn"},
+{text:"If you really want to do something, you'll find a way. If you don't, you'll find an excuse.",author:"Jim Rohn"},
+{text:"Time is more valuable than money. You can get more money, but you cannot get more time.",author:"Jim Rohn"},
+{text:"Take care of your body. It's the only place you have to live.",author:"Jim Rohn"},
+{text:"Don't join an easy crowd; you won't grow. Go where the expectations and demands to perform are high.",author:"Jim Rohn"},
+{text:"Happiness is not something you postpone for the future; it is something you design for the present.",author:"Jim Rohn"},
+{text:"You cannot change your destination overnight, but you can change your direction overnight.",author:"Jim Rohn"},
+{text:"For every disciplined effort there is a multiple reward.",author:"Jim Rohn"},
+{text:"The major reason for setting a goal is for what it makes of you to accomplish it.",author:"Jim Rohn"},
+{text:"Let others lead small lives, but not you. Let others argue over small things, but not you.",author:"Jim Rohn"},
+{text:"Income seldom exceeds personal development.",author:"Jim Rohn"},
+{text:"Learn how to be happy with what you have while you pursue all that you want.",author:"Jim Rohn"},
+// ── Andrew Carnegie ───────────────────────────────────────────────────────────
+{text:"No man will make a great leader who wants to do it all himself or to get all the credit for doing it.",author:"Andrew Carnegie"},
+{text:"The man who acquires the ability to take full possession of his own mind may take possession of anything else to which he is justly entitled.",author:"Andrew Carnegie"},
+{text:"People who are unable to motivate themselves must be content with mediocrity, no matter how impressive their other talents.",author:"Andrew Carnegie"},
+{text:"Concentrate your energies, your thoughts and your capital. The wise man puts all his eggs in one basket and watches the basket.",author:"Andrew Carnegie"},
+{text:"Think of yourself as on the threshold of unparalleled success.",author:"Andrew Carnegie"},
+{text:"There is little success where there is little laughter.",author:"Andrew Carnegie"},
+{text:"Anything in life worth having is worth working for.",author:"Andrew Carnegie"},
+{text:"The man who dies rich dies disgraced.",author:"Andrew Carnegie"},
+{text:"As I grow older, I pay less attention to what men say. I just watch what they do.",author:"Andrew Carnegie"},
+{text:"Do not look for approval except for the consciousness of doing your best.",author:"Andrew Carnegie"},
+{text:"No man becomes rich unless he enriches others.",author:"Andrew Carnegie"},
+{text:"Do your duty and a little more and the future will take care of itself.",author:"Andrew Carnegie"},
+{text:"The average person puts only 25% of his energy and ability into his work. The world takes off its hat to those who put in more than 50% of their capacity.",author:"Andrew Carnegie"},
+{text:"The secret of success lies not in doing your own work, but in recognizing the right man to do it.",author:"Andrew Carnegie"},
+{text:"He that cannot reason is a fool. He that will not is a bigot. He that dare not is a slave.",author:"Andrew Carnegie"},
+{text:"A library outranks any other one thing a community can do to benefit its people.",author:"Andrew Carnegie"},
+{text:"Surplus wealth is a sacred trust which its possessor is bound to administer in his lifetime for the good of the community.",author:"Andrew Carnegie"},
+{text:"I believe that the true road to preeminent success in any line is to make yourself master of that line.",author:"Andrew Carnegie"}
+];
+
+function getDailyQuote(){
+  const n=new Date();
+  const h=n.getHours();
+  // Three 8-hour windows: 00:00–07:59 (win 0), 08:00–15:59 (win 1), 16:00–23:59 (win 2)
+  const win=h<8?0:h<16?1:2;
+  // Deterministic seed from local date + window — stable for full window, no localStorage
+  // LCG constants; day*1664525 stays well within JS safe integer range for any year 2020-2099
+  const day=n.getFullYear()*10000+(n.getMonth()+1)*100+n.getDate();
+  const s=(day*1664525+win*22695477+1013904223)%4294967296;
+  return DAILY_QUOTES[s%DAILY_QUOTES.length];
+}
+
+
 /* ============ HOME ============ */
 function renderHome(){
   _txCountMap = null;
@@ -2128,6 +2301,13 @@ function renderHome(){
   if(_chipHtmlParts){
     html+='<div class="card" style="display:flex;flex-wrap:wrap;gap:8px;padding:12px 14px">'+_chipHtmlParts+'</div>';
   }
+
+  const _dq=getDailyQuote();
+  html+='<div class="card" style="padding:16px 16px 14px">'
+    +'<div style="font-family:var(--mono);font-size:9px;color:var(--home);letter-spacing:2px;margin-bottom:10px">DAILY QUOTE</div>'
+    +'<div style="font-size:12.5px;line-height:1.65;color:var(--text);font-style:italic">&#8220;'+escHtml(_dq.text)+'&#8221;</div>'
+    +'<div style="font-family:var(--mono);font-size:10px;color:var(--mute);margin-top:10px;text-align:right">&#8212;&nbsp;'+escHtml(_dq.author)+'</div>'
+    +'</div>';
 
   html += '<div id="home-day-ring"></div>';
 
